@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一二 &amp; 布布 · 3D 双人闯关</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(160deg, #2b2450 0%, #3d3468 60%, #2b2450 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    overflow: hidden;
+    user-select: none;
+  }
+  h1 { font-size: 24px; letter-spacing: 3px; margin-bottom: 6px; text-shadow: 0 3px 8px rgba(0,0,0,.4); }
+  .hint { font-size: 13px; opacity: .85; margin-bottom: 10px; text-align: center; line-height: 1.7; }
+  .hint b.p1 { color: #8ec8ff; }
+  .hint b.p2 { color: #ffb380; }
+  #sceneWrap {
+    position: relative;
+    width: min(96vw, 1120px);
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,.5);
+    cursor: pointer;
+  }
+  #sceneWrap canvas { display: block; }
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(20,16,40,.55);
+    color: #fff; text-align: center;
+    pointer-events: none;
+    opacity: 1; transition: opacity .25s;
+  }
+  #overlay.hidden { opacity: 0; }
+  #overlay .title { font-size: 34px; font-weight: bold; letter-spacing: 4px; text-shadow: 0 3px 10px rgba(0,0,0,.5); }
+  #overlay .sub { margin-top: 10px; font-size: 16px; opacity: .9; }
+  #hud { margin-top: 10px; font-size: 15px; letter-spacing: 1px; min-height: 22px; }
+  .btn { margin-top: 10px; padding: 7px 20px; font-size: 14px; color: #fff; background: #4c6ef5; border: none; border-radius: 18px; cursor: pointer; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(76,110,245,.4); }
+  .btn:hover { background: #3b5bdb; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+  <h1>一二 &amp; 布布 · 3D 双人闯关</h1>
+  <div class="hint">
+    <b class="p1">一 二</b>（水·白熊猫）　A 左 / D 右 / W 跳　　|　　<b class="p2">布 布</b>（火·棕小熊）　← 左 / → 右 / ↑ 跳<br>
+    <b class="p1">水池</b>只有一二能走 · <b class="p2">岩浆</b>只有布布能走 · 毒液两人都不能踩<br>
+    踩住<b>压力按钮</b>打开<b>能量门</b> · 推动<b>木箱</b>压住按钮可让门永久开启 · 两人同时进入出口过关 · 按 R 重开本关
+  </div>
+  <div id="sceneWrap">
+    <div id="overlay"><div class="title">第 1 关</div><div class="sub">点击画面开始</div></div>
+  </div>
+  <div id="hud"></div>
+  <button class="btn" id="retryBtn">重新开始</button>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ================================================================
+   一二 & 布布 · 3D 双人闯关（森林冰火人风格）
+   2D 物理 + 3D 渲染：程序化小熊角色（层级关节 + 双腿 IK 步态）
+   地图符号：
+     #  墙壁     .  空地     P  一二出生   B  布布出生
+     W  水池     L  岩浆     T  毒液
+     w  水宝石   l  火宝石
+     1  蓝色按钮 2  粉色按钮
+     D  蓝色门   E  粉色门
+     C  木箱     X  出口
+   ================================================================ */
+
+/* ================= 物理常量（沿用 2D 版验证过的手感） ================= */
+const TILE = 40;
+const GRAVITY = 2400, JUMP = 820;
+const SPEED = 260, ACCEL = 2200;
+const BOX_PUSH = 1.6;
+const SKID_DECEL_MULT = 2.2; // 反向急转刹车倍率（惯性滑行）
+
+/* ================= 关卡定义 =================
+   设计约束（与物理匹配）：跳跃高度 ≈3.5 格，跳跃距离 ≈4.4 格
+   泳池/按钮/门/出口都放在「行走行」（地板墙上方那一行），保证一定能触发 */
+const LEVELS = [
+  // 关卡1：属性地形教学 —— 一二穿过水池，布布穿过岩浆，中间汇合
+  [
+    "################",
+    "#..............#",
+    "#..P........B..#",
+    "#..............#",
+    "#..............#",
+    "#...w......l...#",
+    "#..............#",
+    "#..............#",
+    "#..WW..XX..LL..#",
+    "################",
+  ],
+  // 关卡2：接力按钮 —— 一人踩住左侧按钮，另一人穿门踩住右侧按钮，第一人再穿门
+  [
+    "################",
+    "#.......#......#",
+    "#..P.B..#......#",
+    "#.......#......#",
+    "#.......#......#",
+    "#...w...#..l...#",
+    "#.......#......#",
+    "#.......D......#",
+    "#.1.....D.1.XX.#",
+    "################",
+  ],
+  // 关卡3：木箱协作 —— 把木箱推上按钮，门永久开启
+  [
+    "################",
+    "#.......#......#",
+    "#..P.B..#......#",
+    "#.......#......#",
+    "#.......#......#",
+    "#....w..#..l...#",
+    "#.......#......#",
+    "#.......D......#",
+    "#..C..1.D..XX..#",
+    "################",
+  ],
+  // 关卡4：属性 + 木箱综合 —— 一二蹚水、布布跳水池，推箱开门，布布蹚岩浆、一二跳岩浆
+  [
+    "################",
+    "#.......#......#",
+    "#.PB....#......#",
+    "#.......#......#",
+    "#.......#......#",
+    "#..w....#..l...#",
+    "#.......#......#",
+    "#.......D......#",
+    "#.C.1WW.D.LLXX.#",
+    "################",
+  ],
+  // 关卡5：终极挑战 —— 双侧推箱开门，毒液必须跳过，中间汇合
+  [
+    "################",
+    "#.....#..#.....#",
+    "#.P...#..#...B.#",
+    "#.....#..#.....#",
+    "#.....#..#.....#",
+    "#.w...#..#...l.#",
+    "#.....#..#.....#",
+    "#.....D..E.....#",
+    "#WWC1TDXXET2LC.#",
+    "################",
+  ],
+];
+
+// 每关天空主题：白天 → 黄昏 → 夜晚
+const SKY_THEMES = [
+  { bg: 0xbfe9ff, fog: 0xc8ecff, hemiSky: 0xfff6e0, hemiGround: 0xd8c8b8, sun: 0xfff2d8, sunI: 1.15, night: false },
+  { bg: 0xbfe9ff, fog: 0xc8ecff, hemiSky: 0xfff6e0, hemiGround: 0xd8c8b8, sun: 0xfff2d8, sunI: 1.15, night: false },
+  { bg: 0xffd3a6, fog: 0xffcda0, hemiSky: 0xffe0b8, hemiGround: 0xc8a488, sun: 0xffbf80, sunI: 1.0, night: false },
+  { bg: 0x2a2850, fog: 0x2a2850, hemiSky: 0x8a90d8, hemiGround: 0x404060, sun: 0xaab4ff, sunI: 0.55, night: true },
+  { bg: 0x2a2850, fog: 0x2a2850, hemiSky: 0x8a90d8, hemiGround: 0x404060, sun: 0xaab4ff, sunI: 0.55, night: true },
+];
+
+/* ================= 游戏状态 ================= */
+let curLevel = 0, running = false, won = false, dead = false;
+let cols = 0, rows = 0;
+let solids = [], waters = [], lavas = [], toxins = [];
+let buttons = [], doors = [], boxes = [], gems = [], exits = [];
+let players = [];
+let keys = {};
+
+/* ================= 载入关卡（逻辑部分） ================= */
+function loadLevel(idx) {
+  curLevel = idx;
+  const rowsStr = LEVELS[idx];
+  rows = rowsStr.length;
+  cols = Math.max(...rowsStr.map(r => r.length));
+  const grid = rowsStr.map(r => r.padEnd(cols, '.'));
+
+  solids = []; waters = []; lavas = []; toxins = [];
+  buttons = []; doors = []; boxes = []; gems = []; exits = [];
+  players = [];
+  won = false; dead = false;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const ch = grid[r][c];
+      const x = c * TILE, y = r * TILE;
+      if (ch === '#') solids.push({ x, y, w: TILE, h: TILE });
+      else if (ch === 'W') waters.push({ x, y, w: TILE, h: TILE });
+      else if (ch === 'L') lavas.push({ x, y, w: TILE, h: TILE });
+      else if (ch === 'T') toxins.push({ x, y, w: TILE, h: TILE });
+      else if (ch === 'P') players.push(makePlayer(x + (TILE - 24) / 2, y + TILE, 0));
+      else if (ch === 'B') players.push(makePlayer(x + (TILE - 24) / 2, y + TILE, 1));
+      else if (ch === '1' || ch === '2')
+        buttons.push({ x: x + TILE / 2, y: y + TILE - 8, w: TILE * 0.7, h: 8, who: -1, pressed: false, color: ch === '1' ? 0x4a9eff : 0xff7fa8 });
+      else if (ch === 'D' || ch === 'E')
+        doors.push({ x: x + TILE / 2, baseY: y + TILE, open: false, openT: 0, color: ch === 'D' ? 0x4a9eff : 0xff7fa8 });
+      else if (ch === 'C') boxes.push({ x: x + 2, y: y + 2, w: TILE - 4, h: TILE - 4, vx: 0, vy: 0 });
+      else if (ch === 'w' || ch === 'l')
+        gems.push({ x: x + TILE / 2, y: y + TILE / 2, r: 10, color: ch === 'w' ? 0x4a9eff : 0xff7fa8, owner: ch === 'w' ? 0 : 1, got: false });
+      else if (ch === 'X') exits.push({ x: x + TILE / 2, baseY: y + TILE });
+    }
+  }
+  buildLevelMeshes(grid);
+  applySkyTheme(SKY_THEMES[curLevel] || SKY_THEMES[0]);
+  showOverlay(`第 ${idx + 1} 关`, '点击画面开始');
+  running = false;
+  updateHUD();
+}
+
+function makePlayer(x, y, idx) {
+  return {
+    idx, x, y, w: 24, h: 38, vx: 0, vy: 0, onGround: false, face: 1, bornX: x, bornY: y,
+    // 3D 动画状态
+    yaw: 0, yawVel: 0,          // 朝向角 + 弹簧阻尼（转身惯性/缓冲）
+    walkPhase: 0, breathT: Math.random() * 6, blinkT: 2 + Math.random() * 3,
+    gait: {
+      feet: [
+        { wx: 0, state: 'stance', t: 1, from: 0, to: 0 },  // 左脚
+        { wx: 0, state: 'stance', t: 1, from: 0, to: 0 },  // 右脚
+      ],
+    },
+    mesh: null, parts: null,
+  };
+}
+
+/* ================= 输入 ================= */
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'KeyR' && running) loadLevel(curLevel);
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function applyInput(p, dt) {
+  const isP1 = p.idx === 0;
+  const left = keys[isP1 ? 'KeyA' : 'ArrowLeft'];
+  const right = keys[isP1 ? 'KeyD' : 'ArrowRight'];
+  const jump = keys[isP1 ? 'KeyW' : 'ArrowUp'];
+
+  let dir = (right ? 1 : 0) - (left ? 1 : 0);
+  if (dir !== 0) {
+    // 反向急转：移动方向与输入相反时加大刹车力（惯性滑行）
+    const reversing = p.vx !== 0 && Math.sign(p.vx) !== dir;
+    p.vx += dir * (reversing ? ACCEL * SKID_DECEL_MULT : ACCEL) * dt;
+    p.face = dir;
+  } else {
+    const dec = 1800 * dt;
+    p.vx = Math.abs(p.vx) <= dec ? 0 : p.vx - Math.sign(p.vx) * dec;
+  }
+  p.vx = Math.max(-SPEED, Math.min(SPEED, p.vx));
+
+  if (jump && p.onGround) { p.vy = -JUMP; p.onGround = false; }
+}
+
+/* ================= 碰撞 ================= */
+function collide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function isSolidAt(x, y, w, h) {
+  const box = { x, y, w, h };
+  for (const s of solids) if (collide(box, s)) return true;
+  for (const d of doors) {
+    if (!d.open) {
+      const db = { x: d.x - TILE / 2 + 4, y: d.baseY - TILE, w: TILE - 8, h: TILE };
+      if (collide(box, db)) return true;
+    }
+  }
+  for (const b of boxes) if (collide(box, b)) return true;
+  return false;
+}
+
+function stepPlayer(p) {
+  // 水平
+  p.x += p.vx * (1 / 60);
+  for (let i = 0; i < 20 && isSolidAt(p.x, p.y, p.w, p.h); i++) {
+    if (p.vx > 0) p.x -= 1;
+    else if (p.vx < 0) p.x += 1;
+    p.vx = 0;
+  }
+  // 垂直
+  p.vy += GRAVITY * (1 / 60);
+  p.y += p.vy * (1 / 60);
+  p.onGround = false;
+  for (let i = 0; i < 20 && isSolidAt(p.x, p.y, p.w, p.h); i++) {
+    if (p.vy > 0) { p.y -= 1; p.onGround = true; }
+    else if (p.vy < 0) { p.y += 1; }
+    p.vy = 0;
+  }
+  p.x = Math.max(0, Math.min(cols * TILE - p.w, p.x));
+}
+
+/* ================= 木箱推动 ================= */
+function pushBoxes() {
+  for (const box of boxes) {
+    box.vx = 0;
+    for (const p of players) {
+      const facing = p.face > 0 ? p.x + p.w : p.x;
+      const boxEdge = p.face > 0 ? box.x : box.x + box.w;
+      if (Math.abs(facing - boxEdge) < 4 && Math.abs((p.y + p.h) - (box.y + box.h)) < 8) {
+        box.vx = p.vx * BOX_PUSH;
+        break;
+      }
+    }
+    if (box.vx === 0) continue;
+    box.x += box.vx * (1 / 60);
+    for (const s of solids) {
+      if (collide(box, s)) { box.x = box.vx > 0 ? s.x - box.w : s.x + s.w; box.vx = 0; }
+    }
+    for (const d of doors) {
+      if (!d.open) {
+        const db = { x: d.x - TILE / 2 + 4, y: d.baseY - TILE, w: TILE - 8, h: TILE };
+        if (collide(box, db)) { box.x = box.vx > 0 ? db.x - box.w : db.x + db.w; box.vx = 0; }
+      }
+    }
+    for (const other of boxes) {
+      if (other !== box && collide(box, other)) { box.x = box.vx > 0 ? other.x - box.w : other.x + other.w; box.vx = 0; }
+    }
+  }
+}
+
+/* ================= 危险检测 ================= */
+function checkHazards() {
+  for (const p of players) {
+    const feet = { x: p.x + 2, y: p.y + p.h - 6, w: p.w - 4, h: 6 };
+    const body = { x: p.x, y: p.y, w: p.w, h: p.h };
+    for (const w of waters) if (collide(feet, w) && p.idx !== 0) return true;  // 布布碰水
+    for (const l of lavas) if (collide(feet, l) && p.idx !== 1) return true;   // 一二碰岩浆
+    for (const t of toxins) if (collide(body, t)) return true;                 // 毒液都危险
+    if (p.y > rows * TILE + 100) return true;
+  }
+  return false;
+}
+
+/* ================= 按钮与门 ================= */
+// 按钮 x 为中心点，碰撞时换算成左边缘盒子
+const btnBox = b => ({ x: b.x - b.w / 2, y: b.y, w: b.w, h: b.h });
+
+function updateButtonsAndDoors() {
+  for (const btn of buttons) btn.pressed = false;
+  for (const p of players) {
+    for (const btn of buttons) {
+      if (btn.who === -1 || btn.who === p.idx) {
+        const box = { x: p.x, y: p.y + p.h - 4, w: p.w, h: 4 };
+        if (collide(box, btnBox(btn))) btn.pressed = true;
+      }
+    }
+  }
+  for (const box of boxes) {
+    for (const btn of buttons) {
+      const boxBottom = { x: box.x, y: box.y + box.h - 4, w: box.w, h: 4 };
+      if (collide(boxBottom, btnBox(btn))) btn.pressed = true;
+    }
+  }
+  for (const door of doors) {
+    door.open = false;
+    for (const btn of buttons) {
+      if (btn.color === door.color && btn.pressed) { door.open = true; break; }
+    }
+  }
+}
+
+/* ================= 宝石收集 / 过关 ================= */
+function collectGems() {
+  for (const gem of gems) {
+    if (gem.got) continue;
+    for (const p of players) {
+      if (gem.owner === -1 || gem.owner === p.idx) {
+        const dx = (p.x + p.w / 2) - gem.x;
+        const dy = (p.y + p.h / 2) - gem.y;
+        if (Math.sqrt(dx * dx + dy * dy) < gem.r + 12) gem.got = true;
+      }
+    }
+  }
+}
+
+function checkExit() {
+  if (exits.length === 0) return false;
+  // 判定区域覆盖所有出口格，两人同时站在出口范围内即过关
+  const minX = Math.min(...exits.map(e => e.x)) - TILE / 2 + 4;
+  const maxX = Math.max(...exits.map(e => e.x)) + TILE / 2 - 4;
+  const exitBox = { x: minX, y: exits[0].baseY - 20, w: maxX - minX, h: 20 };
+  for (const p of players) {
+    const feetBox = { x: p.x + 4, y: p.y + p.h - 10, w: p.w - 8, h: 10 };
+    if (!collide(feetBox, exitBox)) return false;
+  }
+  return true;
+}
+
+/* ================= 主更新 ================= */
+function update(dt) {
+  if (!running || won || dead) return;
+
+  applyInput(players[0], dt);
+  applyInput(players[1], dt);
+  for (const p of players) updateGait(p, dt);
+
+  pushBoxes();
+  stepPlayer(players[0]);
+  stepPlayer(players[1]);
+
+  // 玩家之间碰撞分离
+  const p1 = players[0], p2 = players[1];
+  if (collide(p1, p2)) {
+    const dx = (p2.x + p2.w / 2) - (p1.x + p1.w / 2);
+    const nx = dx === 0 ? 1 : Math.sign(dx);
+    const overlap = (p1.w + p2.w) / 2 - Math.abs(dx);
+    p1.x -= nx * (overlap / 2 + 2);
+    p2.x += nx * (overlap / 2 + 2);
+    p1.x = Math.max(0, Math.min(cols * TILE - p1.w, p1.x));
+    p2.x = Math.max(0, Math.min(cols * TILE - p2.w, p2.x));
+  }
+
+  updateButtonsAndDoors();
+  collectGems();
+
+  if (checkHazards()) {
+    dead = true;
+    showOverlay('💀 哎呀！', '重置中...');
+    setTimeout(() => { loadLevel(curLevel); running = true; hideOverlay(); }, 700);
+  }
+
+  if (checkExit()) {
+    won = true;
+    const last = curLevel + 1 >= LEVELS.length;
+    showOverlay('🎉 过关！', last ? '全部通关！点击重新开始' : '下一关加载中...');
+    if (!last) setTimeout(() => { loadLevel(curLevel + 1); running = true; hideOverlay(); }, 900);
+  }
+
+  updateHUD();
+}
+
+/* ================================================================
+   3D 渲染层
+   ================================================================ */
+
+/* ================= 坐标映射：逻辑像素 → 3D 世界（1 格 = 1 单位） ================= */
+const worldX = px => px / TILE - cols / 2;
+const worldY = py => rows - py / TILE;   // y 翻转（逻辑 y 向下，世界 y 向上）
+
+/* ================= 场景初始化 ================= */
+const wrap = document.getElementById('sceneWrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+wrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
+
+const hemiLight = new THREE.HemisphereLight(0xfff6e0, 0xd8c8b8, 0.95);
+scene.add(hemiLight);
+const sunLight = new THREE.DirectionalLight(0xfff2d8, 1.15);
+sunLight.position.set(6, 12, 8);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -12; sunLight.shadow.camera.right = 12;
+sunLight.shadow.camera.top = 12; sunLight.shadow.camera.bottom = -12;
+sunLight.shadow.camera.far = 40;
+sunLight.shadow.radius = 4;
+scene.add(sunLight);
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+/* ================= 天空主题 / 云朵 / 星星 / 月亮 ================= */
+const cloudGroup = new THREE.Group();
+const starGroup = new THREE.Group();
+let moonMesh = null;
+scene.add(cloudGroup, starGroup);
+
+{
+  // 云朵：扁平球组合，缓慢漂移
+  const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
+  for (let i = 0; i < 7; i++) {
+    const cloud = new THREE.Group();
+    const n = 2 + (i % 2);
+    for (let j = 0; j < n; j++) {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.5 + Math.random() * 0.35, 12, 10), cloudMat);
+      puff.position.set(j * 0.55 - n * 0.25, Math.random() * 0.15, 0);
+      puff.scale.y = 0.45;
+      cloud.add(puff);
+    }
+    cloud.position.set(-8 + i * 2.6 + Math.random(), 6.5 + Math.random() * 2, -4 - Math.random() * 2);
+    cloud.userData.speed = 0.08 + Math.random() * 0.06;
+    cloudGroup.add(cloud);
+  }
+  // 星星
+  const starGeo = new THREE.BufferGeometry();
+  const starPos = [];
+  for (let i = 0; i < 90; i++) starPos.push((Math.random() - 0.5) * 26, 3 + Math.random() * 9, -6 - Math.random() * 3);
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  starGroup.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xfff8d0, size: 0.08 })));
+  // 月亮
+  moonMesh = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 16), new THREE.MeshStandardMaterial({ color: 0xfff3c4, emissive: 0xffe9a0, emissiveIntensity: 0.7 }));
+  moonMesh.position.set(-6.5, 8, -6);
+  starGroup.add(moonMesh);
+}
+
+function applySkyTheme(theme) {
+  scene.background = new THREE.Color(theme.bg);
+  scene.fog = new THREE.Fog(theme.fog, 16, 34);
+  hemiLight.color.setHex(theme.hemiSky);
+  hemiLight.groundColor.setHex(theme.hemiGround);
+  hemiLight.intensity = theme.night ? 0.7 : 0.95;
+  sunLight.color.setHex(theme.sun);
+  sunLight.intensity = theme.sunI;
+  starGroup.visible = theme.night;
+  cloudGroup.traverse(o => { if (o.isMesh) o.material.opacity = 1; });
+}
+
+/* ================= 关卡网格 → 3D 模型 ================= */
+let levelGroup = null;
+const bearActors = []; // 两只小熊只建一次，换关复用（避免旧模型残留场景）
+const meshRefs = { walls: [], waters: [], lavas: [], toxins: [], buttons: [], doors: [], boxes: [], gems: [], exits: [] };
+
+const MAT = {
+  dirt: new THREE.MeshStandardMaterial({ color: 0x9c6b4f, roughness: 0.95 }),
+  grass: new THREE.MeshStandardMaterial({ color: 0x7cc56b, roughness: 0.9 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0xb98955, roughness: 0.85 }),
+  pole: new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.7 }),
+};
+
+function buildLevelMeshes(grid) {
+  if (levelGroup) scene.remove(levelGroup);
+  levelGroup = new THREE.Group();
+  scene.add(levelGroup);
+  for (const k in meshRefs) meshRefs[k] = [];
+
+  // 墙壁（上方无墙则加草皮盖）
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== '#') continue;
+      const dirt = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), MAT.dirt);
+      dirt.position.set(c - cols / 2 + 0.5, rows - r - 0.5, 0);
+      dirt.receiveShadow = true; dirt.castShadow = true;
+      levelGroup.add(dirt);
+      if (r === 0 || grid[r - 1][c] !== '#') {
+        const grass = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.16, 1.02), MAT.grass);
+        grass.position.set(c - cols / 2 + 0.5, rows - r - 0.08 + 0.08, 0);
+        grass.receiveShadow = true;
+        levelGroup.add(grass);
+      }
+    }
+  }
+
+  // 液体池：浅水视觉效果（角色蹚水而非被淹没），判定仍按整格
+  const liquidDefs = [
+    [waters, 'waters', 0x4a9eff, 0x1c5fb8],
+    [lavas, 'lavas', 0xff7fa8, 0xd8407a],
+    [toxins, 'toxins', 0xc47fff, 0x8a3fd8],
+  ];
+  for (const [arr, key, color, emissive] of liquidDefs) {
+    for (const l of arr) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 0.38, 0.9),
+        new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: 0.35, transparent: true, opacity: 0.75, roughness: 0.3 })
+      );
+      m.position.set(worldX(l.x + TILE / 2), worldY(l.y + TILE) + 0.19, 0);
+      levelGroup.add(m);
+      meshRefs[key].push(m);
+    }
+  }
+
+  // 按钮：底座 + 彩色压帽
+  for (const b of buttons) {
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.07, 20), new THREE.MeshStandardMaterial({ color: 0x8a8a9a, roughness: 0.6 }));
+    base.position.y = 0.035;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.09, 20), new THREE.MeshStandardMaterial({ color: b.color, emissive: b.color, emissiveIntensity: 0.3, roughness: 0.5 }));
+    cap.position.y = 0.12;
+    cap.castShadow = true;
+    g.add(base, cap);
+    g.position.set(worldX(b.x), worldY(b.y + 8), 0);
+    levelGroup.add(g);
+    meshRefs.buttons.push({ btn: b, cap });
+  }
+
+  // 能量门：发光面板
+  for (const d of doors) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 1, 0.12),
+      new THREE.MeshStandardMaterial({ color: d.color, emissive: d.color, emissiveIntensity: 0.8, transparent: true, opacity: 0.85 })
+    );
+    m.position.set(worldX(d.x), worldY(d.baseY) + 0.5, 0);
+    levelGroup.add(m);
+    meshRefs.doors.push({ door: d, mesh: m });
+  }
+
+  // 木箱
+  for (const b of boxes) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), MAT.wood);
+    m.castShadow = true; m.receiveShadow = true;
+    levelGroup.add(m);
+    meshRefs.boxes.push({ box: b, mesh: m });
+  }
+
+  // 宝石：旋转八面体
+  for (const gm of gems) {
+    const m = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.2),
+      new THREE.MeshStandardMaterial({ color: gm.color, emissive: gm.color, emissiveIntensity: 0.6, roughness: 0.2 })
+    );
+    m.position.set(worldX(gm.x), worldY(gm.y), 0.2);
+    m.castShadow = true;
+    levelGroup.add(m);
+    meshRefs.gems.push({ gem: gm, mesh: m, phase: Math.random() * 6 });
+  }
+
+  // 出口：旗杆 + 旗帜 + 地面光环
+  for (const ex of exits) {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.4, 10), MAT.pole);
+    pole.position.y = 0.7;
+    pole.castShadow = true;
+    const flagGeo = new THREE.BoxGeometry(0.5, 0.3, 0.03);
+    flagGeo.translate(0.25, 0, 0); // 锚点在旗杆侧
+    const flag = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ color: 0x2bd88a, emissive: 0x1c9a5f, emissiveIntensity: 0.3 }));
+    flag.position.set(0, 1.2, 0);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xaa8800, emissiveIntensity: 0.4 }));
+    ball.position.y = 1.43;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.04, 10, 28), new THREE.MeshStandardMaterial({ color: 0x2bd88a, emissive: 0x2bd88a, emissiveIntensity: 0.5, transparent: true, opacity: 0.7 }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.03;
+    g.add(pole, flag, ball, ring);
+    g.position.set(worldX(ex.x), worldY(ex.baseY), 0);
+    levelGroup.add(g);
+    meshRefs.exits.push({ exit: ex, flag, ring });
+  }
+
+  // 相机对准关卡中心
+  camera.position.set(0, rows / 2 + 1.4, 12.4);
+  camera.lookAt(0, rows / 2 - 0.6, 0);
+
+  // 角色模型复用（首次创建，之后换关只重置位置与朝向）
+  for (const p of players) {
+    if (!bearActors[p.idx]) {
+      bearActors[p.idx] = makeBear(p.idx);
+      scene.add(bearActors[p.idx].mesh);
+    }
+    p.mesh = bearActors[p.idx].mesh;
+    p.parts = bearActors[p.idx].parts;
+    p.yaw = p.idx === 0 ? Math.PI / 2 : -Math.PI / 2;
+    p.yawVel = 0;
+    // 初始化脚部落点
+    const bwx = worldX(p.x + p.w / 2);
+    p.gait.feet[0].wx = bwx; p.gait.feet[1].wx = bwx;
+  }
+}
+
+/* ================= 程序化 3D 小熊（层级关节） ================= */
+const PALETTES = [
+  { body: 0xf7f3ee, belly: 0xffffff, ear: 0x4a2f23, limb: 0x4a2f23, muzzle: 0xffffff, patch: true,  blush: 0xffb6c8 }, // 一二：白熊猫
+  { body: 0xc98f5f, belly: 0xf3e0c8, ear: 0x8a5a33, limb: 0xb57c4a, muzzle: 0xf3e0c8, patch: false, blush: 0xffc890 }, // 布布：棕小熊
+];
+const INDICATOR_COLORS = [0x4a9eff, 0xff7fa8];
+
+// 腿部骨骼常量（两骨 IK：髋 → 膝 → 脚）
+const HIP_Y = 0.34, HIP_X = 0.10, LEG_L1 = 0.16, LEG_L2 = 0.16;
+const STEP_LEN = 0.17, SWING_TIME = 0.16, SWING_H = 0.085, LEG_REACH = LEG_L1 + LEG_L2 - 0.02;
+
+function makeBear(idx) {
+  const P = PALETTES[idx];
+  const g = new THREE.Group();       // 根：位置=脚底中心，rotation.y=朝向
+  const inner = new THREE.Group();   // 内层：俯仰/侧倾（惯性倾斜）
+  g.add(inner);
+
+  const mat = (c, r = 0.85, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, ...extra });
+
+  // 身体
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 18), mat(P.body));
+  body.position.y = 0.58;
+  body.scale.set(1, 1.05, 0.92);
+  inner.add(body);
+  // 肚皮
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.19, 20, 14), mat(P.belly));
+  belly.position.set(0, 0.53, 0.12);
+  belly.scale.set(1, 1.05, 0.6);
+  inner.add(belly);
+
+  // 头（独立关节，可点头/随身体反向微晃）
+  const headG = new THREE.Group();
+  headG.position.set(0, 1.0, 0);
+  inner.add(headG);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 24, 18), mat(P.body));
+  headG.add(head);
+  // 耳朵
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 10), mat(P.ear));
+    ear.position.set(s * 0.19, 0.24, 0);
+    headG.add(ear);
+  }
+  // 一二的熊猫眼斑
+  if (P.patch) {
+    for (const s of [-1, 1]) {
+      const patch = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), mat(0x4a2f23, 0.9));
+      patch.position.set(s * 0.115, 0.03, 0.235);
+      patch.scale.set(1, 1.25, 0.45);
+      headG.add(patch);
+    }
+  }
+  // 眼睛（黑色 + 高光，眨眼时压扁）
+  const eyes = [];
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), mat(0x2a2a2a, 0.4));
+    eye.position.set(s * 0.115, 0.03, 0.265);
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.017, 6, 6), mat(0xffffff, 0.3));
+    spark.position.set(0.015, 0.015, 0.04);
+    eye.add(spark);
+    headG.add(eye);
+    eyes.push(eye);
+  }
+  // 口鼻
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.10, 14, 10), mat(P.muzzle));
+  muzzle.position.set(0, -0.09, 0.25);
+  muzzle.scale.set(1.15, 0.8, 0.7);
+  headG.add(muzzle);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), mat(0x4a2f23, 0.6));
+  nose.position.set(0, -0.045, 0.315);
+  headG.add(nose);
+  // 腮红
+  for (const s of [-1, 1]) {
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), mat(P.blush, 1, { transparent: true, opacity: 0.85 }));
+    blush.position.set(s * 0.19, -0.06, 0.20);
+    blush.scale.set(1, 0.7, 0.4);
+    headG.add(blush);
+  }
+
+  // 手臂（肩部关节，行走时反向摆动）
+  const arms = [];
+  for (const s of [-1, 1]) {
+    const shoulder = new THREE.Group();
+    shoulder.position.set(s * 0.26, 0.68, 0);
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.2, 6, 10), mat(P.limb));
+    arm.position.y = -0.15;
+    shoulder.add(arm);
+    inner.add(shoulder);
+    arms.push(shoulder);
+  }
+
+  // 腿（两骨 IK 段：大腿 / 小腿 / 脚，每帧由 IK 求解摆放）
+  const legMatL = mat(P.limb);
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, LEG_L1, 6, 10), legMatL);
+    const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, LEG_L2, 6, 10), legMatL);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.07, 0.2), mat(P.ear, 0.8));
+    inner.add(upper, lower, foot);
+    legs.push({ upper, lower, foot, side: s });
+  }
+
+  // 头顶指示标（区分玩家）
+  const marker = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.13, 4), mat(INDICATOR_COLORS[idx], 0.4, { emissive: INDICATOR_COLORS[idx], emissiveIntensity: 0.5 }));
+  marker.rotation.x = Math.PI;
+  marker.position.y = 1.52;
+  inner.add(marker);
+
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+
+  return { mesh: g, parts: { inner, body, headG, arms, legs, eyes, marker } };
+}
+
+/* ================= 步态状态机（支撑相 / 摆动相，脚印世界坐标） ================= */
+function updateGait(p, dt) {
+  const bwx = worldX(p.x + p.w / 2);
+  const speedRatio = Math.min(1, Math.abs(p.vx) / SPEED);
+  p.walkPhase += Math.abs(p.vx) / TILE * dt * 3.2;
+
+  for (const f of p.gait.feet) {
+    if (!p.onGround || speedRatio < 0.06) {
+      // 站立/空中：脚若被落在身后，小步收回身体下方
+      if (f.state === 'stance' && Math.abs(bwx - f.wx) > 0.05) {
+        f.state = 'swing'; f.t = 0; f.from = f.wx; f.to = bwx;
+      }
+    } else if (f.state === 'stance') {
+      // 身体超前支撑脚超过步长 → 进入摆动相，迈向新落点
+      const dir = Math.sign(p.vx);
+      if ((bwx - f.wx) * dir > STEP_LEN) {
+        f.state = 'swing'; f.t = 0;
+        f.from = f.wx;
+        f.to = bwx + dir * STEP_LEN * 0.9;
+      }
+    }
+    if (f.state === 'swing') {
+      f.t += dt / SWING_TIME;
+      if (f.t >= 1) { f.t = 1; f.wx = f.to; f.state = 'stance'; }
+      else f.wx = f.from + (f.to - f.from) * f.t;
+    }
+  }
+}
+
+/* ================= 两骨 IK 求解（髋→膝→脚，膝关节朝前） ================= */
+const _up = new THREE.Vector3(0, 1, 0);
+const _dir = new THREE.Vector3();
+
+function solveKnee(hipZ, hipY, footZ, footY) {
+  let dz = footZ - hipZ, dy = footY - hipY;
+  let d = Math.hypot(dz, dy);
+  const maxD = LEG_L1 + LEG_L2 - 0.001;
+  if (d > maxD) { dz *= maxD / d; dy *= maxD / d; d = maxD; }
+  if (d < 0.001) d = 0.001;
+  const a = (LEG_L1 * LEG_L1 - LEG_L2 * LEG_L2 + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, LEG_L1 * LEG_L1 - a * a));
+  const uz = dz / d, uy = dy / d;
+  // 垂直方向取 +Z 侧 → 膝盖朝前
+  return { z: hipZ + uz * a - uy * h, y: hipY + uy * a + uz * h };
+}
+
+function placeSegment(mesh, ax, ay, az, bx, by, bz) {
+  mesh.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+  _dir.set(bx - ax, by - ay, bz - az).normalize();
+  mesh.quaternion.setFromUnitVectors(_up, _dir);
+}
+
+/* ================= 角色动画（行走循环 + IK 落脚 + 弹簧转身） ================= */
+function animateBear(p, dt, t) {
+  const { inner, body, headG, arms, legs, eyes, marker } = p.parts;
+  const bwx = worldX(p.x + p.w / 2);
+  const bwy = worldY(p.y + p.h);
+  const speedRatio = Math.min(1, Math.abs(p.vx) / SPEED);
+  const moving = speedRatio > 0.06 && p.onGround;
+
+  // ---- 转身：欠阻尼弹簧 → 自然过冲缓冲，速度越快转身越快 ----
+  const targetYaw = p.face * Math.PI / 2;
+  const stiff = 120 + speedRatio * 80, damp = 13;
+  p.yawVel += ((targetYaw - p.yaw) * stiff - p.yawVel * damp) * dt;
+  p.yaw += p.yawVel * dt;
+  p.mesh.rotation.y = p.yaw;
+
+  // ---- 身体姿态：奔跑前倾 / 急转侧倾 / 重心起伏 ----
+  const bob = moving ? -Math.abs(Math.sin(p.walkPhase)) * 0.045 * speedRatio : 0;
+  const sway = moving ? Math.sin(p.walkPhase) * 0.05 * speedRatio : 0; // 重心左右转移
+  const breathe = Math.sin(p.breathT * 2.4) * 0.012;
+  inner.position.y = bob;
+  inner.rotation.x = speedRatio * 0.14 + (p.onGround ? 0 : 0.18);         // 前倾 / 跳跃后仰
+  inner.rotation.z = sway + THREE.MathUtils.clamp(-p.yawVel * 0.03, -0.15, 0.15); // 转弯侧倾
+  body.scale.set(1, 1.05 + breathe + (moving ? Math.abs(Math.cos(p.walkPhase)) * 0.02 : 0), 0.92);
+
+  // ---- 头部：转向时略微滞后的跟随（柔性关节感） ----
+  headG.rotation.z += ((-p.yawVel * 0.05) - headG.rotation.z) * Math.min(1, dt * 8);
+  headG.rotation.x += ((p.onGround ? -speedRatio * 0.06 : -0.15) - headG.rotation.x) * Math.min(1, dt * 8);
+
+  // ---- 手臂：与腿反相摆动；跳跃时举起 ----
+  const armSwing = moving ? Math.sin(p.walkPhase) * 0.55 * speedRatio : Math.sin(p.breathT * 2.4) * 0.04;
+  const armTarget = p.onGround ? armSwing : -0.9;
+  arms[0].rotation.x += (armTarget - arms[0].rotation.x) * Math.min(1, dt * 12);
+  arms[1].rotation.x += ((p.onGround ? -armSwing : -0.9) - arms[1].rotation.x) * Math.min(1, dt * 12);
+
+  // ---- 眨眼 ----
+  p.blinkT -= dt;
+  if (p.blinkT < 0) p.blinkT = 2.2 + Math.random() * 3;
+  const blink = p.blinkT < 0.12 ? 0.12 : 1;
+  for (const e of eyes) e.scale.y += (blink - e.scale.y) * Math.min(1, dt * 30);
+
+  // ---- 头顶指示标浮动 ----
+  marker.position.y = 1.52 + Math.sin(t * 2.5 + p.idx * 2) * 0.04;
+  marker.rotation.y = t * 1.5;
+
+  // ---- 双腿：步态落点 → 本地坐标 → IK 摆放 ----
+  const fwdX = Math.sin(p.yaw);
+  for (let i = 0; i < 2; i++) {
+    const leg = legs[i];
+    const f = p.gait.feet[i];
+    const hx = leg.side * HIP_X;
+
+    // 世界落点 → 角色本地（沿朝向的前向分量）
+    let footZ = (f.wx - bwx) * fwdX;
+    let footY;
+    if (!p.onGround) {
+      // 跳跃收腿
+      footZ = leg.side * 0.05;
+      footY = 0.13;
+    } else {
+      footZ = THREE.MathUtils.clamp(footZ, -LEG_REACH, LEG_REACH);
+      footY = f.state === 'swing' ? Math.sin(Math.PI * f.t) * SWING_H : 0;
+    }
+
+    // 两骨 IK：髋 (hx, HIP_Y, 0) → 膝 → 脚 (hx, footY, footZ)
+    const knee = solveKnee(0, HIP_Y, footZ, footY + 0.035);
+    placeSegment(leg.upper, hx, HIP_Y, 0, hx, knee.y, knee.z);
+    placeSegment(leg.lower, hx, knee.y, knee.z, hx, footY + 0.035, footZ);
+    leg.foot.position.set(hx, footY + 0.035, footZ + 0.02);
+    leg.foot.rotation.x = f.state === 'swing' ? -Math.sin(Math.PI * f.t) * 0.5 : 0;
+  }
+
+  // 根节点位置（脚底贴地）
+  p.mesh.position.set(bwx, bwy, 0);
+}
+
+/* ================= 网格同步 + 场景动效 ================= */
+function syncMeshes(dt, t) {
+  // 液体脉动
+  for (const key of ['waters', 'lavas', 'toxins']) {
+    for (const m of meshRefs[key]) {
+      m.material.emissiveIntensity = 0.3 + Math.sin(t * 2.2 + m.position.x * 1.7) * 0.12;
+    }
+  }
+  // 按钮压帽
+  for (const { btn, cap } of meshRefs.buttons) {
+    const target = btn.pressed ? 0.045 : 0.12;
+    cap.position.y += (target - cap.position.y) * Math.min(1, dt * 18);
+  }
+  // 门开关联动
+  for (const { door, mesh } of meshRefs.doors) {
+    door.openT += ((door.open ? 1 : 0) - door.openT) * Math.min(1, dt * 10);
+    mesh.scale.y = Math.max(0.04, 1 - door.openT * 0.96);
+    mesh.material.opacity = 0.85 - door.openT * 0.72;
+    mesh.material.emissiveIntensity = 0.8 - door.openT * 0.4;
+  }
+  // 木箱
+  for (const { box, mesh } of meshRefs.boxes) {
+    mesh.position.set(worldX(box.x + box.w / 2), worldY(box.y + box.h), 0);
+  }
+  // 宝石：旋转 + 浮动 + 收集后缩小消失
+  for (const g of meshRefs.gems) {
+    const target = g.gem.got ? 0 : 1;
+    g.mesh.scale.setScalar(g.mesh.scale.x + (target - g.mesh.scale.x) * Math.min(1, dt * 10));
+    g.mesh.rotation.y = t * 2.4;
+    g.mesh.position.y = worldY(g.gem.y) + Math.sin(t * 3 + g.phase) * 0.06;
+  }
+  // 出口旗帜飘动 + 光环呼吸
+  for (const e of meshRefs.exits) {
+    e.flag.rotation.y = Math.sin(t * 4) * 0.22;
+    e.ring.material.opacity = 0.5 + Math.sin(t * 3) * 0.2;
+  }
+  // 云朵漂移
+  for (const c of cloudGroup.children) {
+    c.position.x += c.userData.speed * dt;
+    if (c.position.x > 11) c.position.x = -11;
+  }
+}
+
+/* ================= HUD / 覆盖层 ================= */
+const hudEl = document.getElementById('hud');
+const overlayEl = document.getElementById('overlay');
+function updateHUD() {
+  const total = gems.length;
+  const got = gems.filter(g => g.got).length;
+  hudEl.textContent = `第 ${curLevel + 1} 关 · 宝石 ${got}/${total}`;
+}
+function showOverlay(title, sub) {
+  overlayEl.querySelector('.title').textContent = title;
+  overlayEl.querySelector('.sub').textContent = sub;
+  overlayEl.classList.remove('hidden');
+}
+function hideOverlay() { overlayEl.classList.add('hidden'); }
+
+/* ================= 主循环 ================= */
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+  update(dt);
+  for (const p of players) { p.breathT += dt; animateBear(p, dt, t); }
+  syncMeshes(dt, t);
+  renderer.render(scene, camera);
+}
+
+/* ================= 启动 ================= */
+// 调试句柄（供自动化测试读取状态）
+window.__game = {
+  get players() { return players; }, get curLevel() { return curLevel; },
+  get running() { return running; }, get won() { return won; }, get dead() { return dead; },
+  get buttons() { return buttons; }, get doors() { return doors; }, get boxes() { return boxes; },
+  loadLevel,
+};
+
+wrap.addEventListener('click', () => {
+  if (won && curLevel + 1 >= LEVELS.length) { loadLevel(0); }
+  if (!running) { running = true; hideOverlay(); }
+});
+document.getElementById('retryBtn').addEventListener('click', () => { loadLevel(0); });
+
+resize();
+loadLevel(0);
+loop();
+</script>
+</body>
+</html>

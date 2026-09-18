@@ -1,0 +1,19 @@
+{
+  "name": "onetwobubu",
+  "version": "1.0.0",
+  "description": "一二 & 布布 · 情侣双人合作闯关小游戏（纯前端，无构建依赖）",
+  "main": "index.html",
+  "scripts": {
+    "start": "node server.js",
+    "lint": "eslint .",
+    "globals": "node _extract_globals.js",
+    "test": "node tests/run_all.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "eslint": "^10.10.0"
+  }
+}

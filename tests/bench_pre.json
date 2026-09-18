@@ -1,0 +1,81 @@
+{
+  "tag": "pre",
+  "ts": "2026-09-18T17:29:59.214Z",
+  "static": {
+    "/": {
+      "first_ms": 5.89,
+      "status": 200,
+      "bytes": 19609,
+      "revalidate_ms": 0.54,
+      "revalidate_status": 304
+    },
+    "/game.js": {
+      "first_ms": 0.91,
+      "status": 200,
+      "bytes": 124295,
+      "revalidate_ms": 0.5,
+      "revalidate_status": 304
+    },
+    "/ui.js": {
+      "first_ms": 0.58,
+      "status": 200,
+      "bytes": 22851,
+      "revalidate_ms": 0.4,
+      "revalidate_status": 304
+    },
+    "/levels.js": {
+      "first_ms": 0.56,
+      "status": 200,
+      "bytes": 39630,
+      "revalidate_ms": 0.41,
+      "revalidate_status": 304
+    },
+    "/audio.js": {
+      "first_ms": 0.62,
+      "status": 200,
+      "bytes": 13191,
+      "revalidate_ms": 0.75,
+      "revalidate_status": 304
+    },
+    "/style.css": {
+      "first_ms": 0.54,
+      "status": 200,
+      "bytes": 27904,
+      "revalidate_ms": 0.35,
+      "revalidate_status": 304
+    },
+    "/一二.png": {
+      "first_ms": 1,
+      "status": 200,
+      "bytes": 332825,
+      "revalidate_ms": 0.28,
+      "revalidate_status": 304
+    },
+    "/img/微信图片_20260917172505_169_32.jpg": {
+      "first_ms": 0.6,
+      "status": 200,
+      "bytes": 123352,
+      "revalidate_ms": 0.25,
+      "revalidate_status": 304
+    }
+  },
+  "game": {
+    "boss_render": {
+      "avg": 0.169,
+      "p95": 0.4,
+      "max": 0.6
+    },
+    "maze_render": {
+      "avg": 0.155,
+      "p95": 0.3,
+      "max": 0.3
+    },
+    "tick": {
+      "avg": 0,
+      "p95": 0
+    },
+    "fps": 172.9,
+    "heap_mb": 0,
+    "nodes": 0
+  }
+}

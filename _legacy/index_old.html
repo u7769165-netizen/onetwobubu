@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一二 &amp; 布布 · 双人闯关</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(160deg, #1a1a3e 0%, #2a2a5a 60%, #1a1a3e 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    overflow: hidden;
+  }
+  h1 { font-size: 28px; letter-spacing: 3px; margin-bottom: 10px; text-shadow: 0 3px 8px rgba(0,0,0,.4); }
+  .hint { font-size: 14px; opacity: .9; margin-bottom: 16px; text-align: center; line-height: 1.8; }
+  .hint b.p1 { color: #ffb3c9; }
+  .hint b.p2 { color: #ffc46b; }
+  canvas { background: #26264f; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5); display: block; max-width: 96vw; }
+  #status { margin-top: 14px; min-height: 24px; font-size: 16px; letter-spacing: 1px; }
+  .btn { margin-top: 12px; padding: 8px 22px; font-size: 15px; color: #fff; background: #4c6ef5; border: none; border-radius: 20px; cursor: pointer; letter-spacing: 1px; box-shadow: 0 4px 12px rgba(76,110,245,.4); }
+  .btn:hover { background: #3b5bdb; }
+</style>
+</head>
+<body>
+  <h1>一二 &amp; 布布 · 双人闯关</h1>
+  <div class="hint">
+    <b class="p1">一 二</b>（白色熊猫）　A 左 / D 右 / W 跳　　|　　<b class="p2">布 布</b>（棕色小熊）　← 左 / → 右 / ↑ 跳<br>
+    <b class="p1">粉色开关</b>要一二去踩，<b class="p2">橙色开关</b>要布布去踩，<br>
+    全部点亮后大门开启，两人一起走进大门即可过关（按 R 可重开本关）<br>
+    <span style="opacity:.7">贴图：把角色图放到本文件同目录，命名为 一二.png / 布布.png 即可自动替换（白底会自动抠除）</span>
+  </div>
+  <canvas id="game"></canvas>
+  <div id="status"></div>
+  <button class="btn" id="retryBtn">重新开始</button>
+
+<script>
+/* ================= 常量 ================= */
+const TILE = 44;                 // 每格像素
+const GRAVITY = 2300, JUMP = 800;
+const SPEED = 280, ACCEL = 2000;
+const btnH = 14;                 // 开关厚度
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const retryBtn = document.getElementById('retryBtn');
+
+/* ================= 角色贴图 ================= */
+// 把图片放到 index.html 同一文件夹，命名为下列任一即自动生效：
+//   一二：yier.png / 一二.png / p1.png / player1.png（支持 .png .jpg .webp）
+//   布布：bubu.png / 布布.png / p2.png / player2.png
+// 找不到图片时自动回退为内置绘制的 Q 版角色。
+const SPRITE_NAMES = [
+  ['一二.png', 'yier.png', '12.png', 'p1.png', 'player1.png', '一二.jpg', '一二.webp'],
+  ['布布.png', 'bubu.png', 'bb.png', 'p2.png', 'player2.png', '布布.jpg', '布布.webp'],
+];
+const sprites = [null, null];
+
+function tryLoadSprite(idx, i) {
+  const names = SPRITE_NAMES[idx];
+  if (i >= names.length) return;
+  const img = new Image();
+  img.onload = () => { sprites[idx] = removeWhiteBg(img); };
+  img.onerror = () => tryLoadSprite(idx, i + 1);
+  img.src = names[i];
+}
+function loadSprites() { tryLoadSprite(0, 0); tryLoadSprite(1, 0); }
+
+// 自动抠除接近白色的背景（针对白底角色图），保留内部白色区域
+function removeWhiteBg(img) {
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (!w || !h) return img;
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const octx = off.getContext('2d');
+  octx.drawImage(img, 0, 0);
+  let data;
+  try { data = octx.getImageData(0, 0, w, h); } catch (e) { return img; } // 跨域读不到像素则原样返回
+
+  // 已是透明底（四角透明）则无需再抠，避免误伤
+  const corner = (x, y) => data.data[(y * w + x) * 4 + 3];
+  if (corner(0, 0) < 40 && corner(w - 1, 0) < 40 && corner(0, h - 1) < 40 && corner(w - 1, h - 1) < 40) {
+    return img;
+  }
+
+  const px = data.data;
+  const seen = new Uint8Array(w * h);
+  const queue = [];
+  // 从四边种子出发做洪水填充，只清除与边框连通的白色
+  const isWhite = (i) => px[i] > 235 && px[i+1] > 235 && px[i+2] > 235;
+  for (let x = 0; x < w; x++) { queue.push(x, (h-1)*w + x); }
+  for (let y = 0; y < h; y++) { queue.push(y*w, y*w + w - 1); }
+  while (queue.length) {
+    const p = queue.pop();
+    if (p < 0 || p >= w*h || seen[p]) continue;
+    seen[p] = 1;
+    const i = p * 4;
+    if (!isWhite(i)) continue;
+    px[i+3] = 0;
+    const x = p % w, y = (p / w) | 0;
+    if (x > 0) queue.push(p - 1);
+    if (x < w-1) queue.push(p + 1);
+    if (y > 0) queue.push(p - w);
+    if (y < h-1) queue.push(p + w);
+  }
+  octx.putImageData(data, 0, 0);
+  return off;
+}
+
+/* ================= 关卡定义 ================= */
+const LEVELS = [
+  // 关卡1 · 教学：左右对称，两人分别跳上小平台踩自己的开关（1=粉/一二，2=橙/布布）
+  [
+    "................",
+    "..P.........B..",
+    "................",
+    "................",
+    "................",
+    "....1.......2...",
+    "....#.......#...",
+    "........D.......",
+    "################",
+  ],
+  // 关卡2 · 分工：左边粉色开关在低台，右边橙色开关在高台，两人分工跳上去
+  [
+    "................",
+    "..P.........B...",
+    "................",
+    "................",
+    "................",
+    ".............2..",
+    "....1.........#.",
+    "....#...D....#..",
+    "################",
+  ],
+  // 关卡3 · 协作：中间有矮墙隔开两侧，两人分头跳上各自高台踩开关
+  [
+    "................",
+    "..P........B....",
+    "................",
+    "................",
+    "................",
+    "....1........2..",
+    "....#........#..",
+    ".......#D.......",
+    "################",
+  ],
+];
+
+/* ================= 游戏状态 ================= */
+let curLevel = 0, running = false, won = false;
+let cols = 0, rows = 0;
+let levelGrid = [], solids = [], switches = [], doors = [], players = [];
+let keys = {};
+let activatedCount = 0;
+
+/* ================= 通用圆形绘制（兼容不支持 roundRect 的浏览器） ================= */
+function roundRectPath(x, y, w, h, r) {
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/* ================= 载入关卡 ================= */
+function loadLevel(idx) {
+  curLevel = idx;
+  const rowsStr = LEVELS[idx];
+  rows = rowsStr.length;
+  cols = Math.max(...rowsStr.map(r => r.length));
+  levelGrid = rowsStr.map(r => r.padEnd(cols, '.'));
+  setCanvas();
+
+  solids = []; switches = []; doors = []; players = []; activatedCount = 0;
+
+  for (let r = 0; r < rows; r++) {
+    const line = levelGrid[r];
+    for (let c = 0; c < cols; c++) {
+      const ch = line[c];
+      const x = c * TILE, y = r * TILE;
+      if (ch === '#') solids.push({ x, y, w: TILE, h: TILE });
+      else if (ch === 'P') players.push(makePlayer(x + (TILE-26)/2, y + TILE, 0));
+      else if (ch === 'B') players.push(makePlayer(x + (TILE-26)/2, y + TILE, 1));
+      else if (ch === '1' || ch === '2') {
+        const baseY = platformTop(r, c);
+        switches.push({ x: x + TILE/2, y: baseY - btnH, w: TILE * 0.8, h: btnH, who: ch === '1' ? 1 : 2, on: false });
+      }
+      else if (ch === 'D') {
+        const baseY = platformTop(r, c);
+        doors.push({ x: x + TILE/2, baseY, open: false });
+      }
+    }
+  }
+  updateStatus();
+}
+
+function platformTop(r, c) {
+  for (let rr = r + 1; rr < rows; rr++) {
+    if (levelGrid[rr] && levelGrid[rr][c] === '#') return rr * TILE;
+  }
+  return rows * TILE;
+}
+
+function makePlayer(x, y, idx) {
+  return { idx, x, y, w: 26, h: 44, vx: 0, vy: 0, onGround: false, face: 1 };
+}
+
+function setCanvas() {
+  canvas.width = cols * TILE;
+  canvas.height = rows * TILE;
+}
+
+/* ================= 输入 ================= */
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function applyInput(p, dt) {
+  const isP1 = p.idx === 0;
+  const left  = keys[isP1 ? 'KeyA' : 'ArrowLeft'];
+  const right = keys[isP1 ? 'KeyD' : 'ArrowRight'];
+  const jump  = keys[isP1 ? 'KeyW' : 'ArrowUp'];
+
+  let dir = (right ? 1 : 0) - (left ? 1 : 0);
+  if (dir !== 0) { p.vx += dir * ACCEL * dt; p.face = dir; }
+  else {
+    const dec = 1600 * dt;
+    p.vx = Math.abs(p.vx) <= dec ? 0 : p.vx - Math.sign(p.vx) * dec;
+  }
+  p.vx = Math.max(-SPEED, Math.min(SPEED, p.vx));
+
+  if (jump && p.onGround) { p.vy = -JUMP; p.onGround = false; }
+}
+
+/* ================= 物理 ================= */
+function collide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// 统一推进并解析碰撞
+function stepPlayer(p, dt) {
+  // 水平
+  p.x += p.vx * dt;
+  for (const s of solids) {
+    if (collide(p, s)) {
+      p.x = p.vx > 0 ? s.x - p.w : s.x + s.w;
+      p.vx = 0;
+    }
+  }
+  // 垂直
+  p.vy += GRAVITY * dt;
+  p.y += p.vy * dt;
+  p.onGround = false;
+  for (const s of solids) {
+    if (collide(p, s)) {
+      if (p.vy > 0) { p.y = s.y - p.h; p.onGround = true; }
+      else if (p.vy < 0) { p.y = s.y + s.h; }
+      p.vy = 0;
+    }
+  }
+  // 边界
+  p.x = Math.max(0, Math.min(cols * TILE - p.w, p.x));
+}
+
+function separatePlayers() {
+  const a = players[0], b = players[1];
+  if (!collide(a, b)) return;
+  const dx = (b.x + b.w/2) - (a.x + a.w/2);
+  const nx = dx === 0 ? 1 : Math.sign(dx);
+  a.x -= nx * 1.5; b.x += nx * 1.5;
+}
+
+/* ================= 更新 ================= */
+function update(dt) {
+  if (!running) return;
+  applyInput(players[0], dt);
+  applyInput(players[1], dt);
+  stepPlayer(players[0], dt);
+  stepPlayer(players[1], dt);
+  separatePlayers();
+
+  // 开关检测
+  for (const sw of switches) {
+    const owner = players[sw.who - 1];
+    const box = { x: sw.x - sw.w/2, y: sw.y, w: sw.w, h: sw.h + 8 };
+    if (!sw.on && collide(owner, box)) { sw.on = true; activatedCount++; }
+  }
+  const allOn = switches.length > 0 && activatedCount === switches.length;
+  for (const d of doors) d.open = allOn;
+
+  const door = doors[0];
+  const gate = { x: door.x - 24, y: door.baseY - 90, w: 48, h: 90 };
+  if (door.open && (collide(players[0], gate) || collide(players[1], gate))) win();
+}
+
+/* ================= 渲染 ================= */
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 星星
+  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  for (let i = 0; i < 40; i++) {
+    ctx.fillRect((i * 97) % canvas.width, (i * 53) % canvas.height, 2, 2);
+  }
+
+  // 平台
+  for (const s of solids) {
+    ctx.fillStyle = '#3d3d78'; ctx.fillRect(s.x, s.y, s.w, s.h);
+    ctx.fillStyle = '#5252a2'; ctx.fillRect(s.x, s.y, s.w, 6);
+  }
+
+  // 开关
+  for (const sw of switches) {
+    const col = sw.who === 1 ? '#ff7fa8' : '#ffa93d';
+    const x0 = sw.x - sw.w/2, y0 = sw.y;
+    ctx.fillStyle = sw.on ? '#2bd88a' : col;
+    roundRectPath(x0, y0, sw.w, 12, 6); ctx.fill();
+    if (!sw.on) {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(sw.x, y0 + 6, 3, 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#0f8f5a';
+      roundRectPath(x0, y0 + 6, sw.w, 6, 3); ctx.fill();
+    }
+  }
+
+  // 门
+  for (const d of doors) {
+    const x0 = d.x - 22, y0 = d.baseY - 90;
+    if (d.open) {
+      ctx.fillStyle = 'rgba(43,216,138,.2)';
+      ctx.fillRect(x0 - 30, y0 - 30, 104, 130);
+      ctx.fillStyle = '#2bd88a'; ctx.textAlign = 'center'; ctx.font = 'bold 30px sans-serif';
+      ctx.fillText('GO', d.x, d.baseY - 40);
+      // 光圈
+      ctx.strokeStyle = 'rgba(43,216,138,.6)'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(d.x, d.baseY - 40, 34, 0, Math.PI*2); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#9d9dc4'; ctx.fillRect(x0, y0, 44, 90);
+      ctx.fillStyle = '#7a6bd0'; ctx.fillRect(x0 + 8, y0 + 10, 28, 72);
+      ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(d.x, y0 + 45, 5, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // 玩家
+  for (const p of players) drawPlayer(p);
+  if (!running) drawOverlay();
+}
+
+function drawPlayer(p) {
+  const cx = p.x + p.w/2, gy = p.y + p.h;
+  const img = sprites[p.idx];
+
+  // 有贴图时优先绘制图片（自动等比缩放、底部对齐、朝向镜像）
+  const iw = img && (img.naturalWidth || img.width);
+  const ih = img && (img.naturalHeight || img.height);
+  if (img && iw > 0 && ih > 0) {
+    const targetH = 58;
+    let dw = iw * (targetH / ih);
+    const maxW = 72;
+    if (dw > maxW) dw = maxW;
+    const dh = dw * ih / iw;
+    ctx.save();
+    ctx.translate(cx, gy - dh / 2);
+    if (p.face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  // ---------- 内置绘制（无贴图时的 Q 版回退） ----------
+  const OUT = '#4a2f23';                                   // 深棕描边
+  const fill = p.idx === 0 ? '#ffffff' : '#d9a06b';        // 一二白 / 布布棕
+  const ear  = p.idx === 0 ? '#4a2f23' : '#b57c4a';        // 一二棕耳 / 布布同色耳
+  const blush= p.idx === 0 ? 'rgba(255,150,170,.85)' : 'rgba(255,190,110,.9)';
+  const headR = 15, headY = gy - 46;
+
+  ctx.lineWidth = 2.5; ctx.strokeStyle = OUT; ctx.lineJoin = 'round';
+
+  // 腿
+  ctx.fillStyle = fill;
+  roundRectPath(cx - 10, gy - 12, 8, 12, 3); ctx.fill(); ctx.stroke();
+  roundRectPath(cx + 2, gy - 12, 8, 12, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = ear;                                     // 脚掌
+  ctx.beginPath(); ctx.ellipse(cx - 6, gy - 1, 5, 2.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx + 6, gy - 1, 5, 2.5, 0, 0, Math.PI*2); ctx.fill();
+
+  // 身体
+  ctx.fillStyle = fill;
+  roundRectPath(cx - 13, gy - 32, 26, 24, 10); ctx.fill(); ctx.stroke();
+  if (p.idx === 0) {                                       // 一二胸前的深棕毛
+    ctx.fillStyle = OUT;
+    ctx.beginPath();
+    ctx.moveTo(cx - 7, gy - 32); ctx.quadraticCurveTo(cx, gy - 22, cx + 7, gy - 32);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // 手臂
+  ctx.fillStyle = fill; ctx.strokeStyle = OUT;
+  ctx.beginPath(); ctx.ellipse(cx - 15, gy - 22, 4, 7, 0.3, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(cx + 15, gy - 22, 4, 7, -0.3, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  // 耳朵
+  ctx.fillStyle = ear;
+  ctx.beginPath(); ctx.arc(cx - headR + 3, headY - headR + 4, 6.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx + headR - 3, headY - headR + 4, 6.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  // 头
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.arc(cx, headY, headR, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  // 眼睛（看向移动方向）
+  const e = p.face > 0 ? 1.5 : -1.5;
+  ctx.fillStyle = OUT;
+  ctx.beginPath(); ctx.arc(cx + e - 5, headY + 1, 2.8, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + e + 5, headY + 1, 2.8, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';                                  // 眼神光
+  ctx.beginPath(); ctx.arc(cx + e - 4, headY, 1, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + e + 6, headY, 1, 0, Math.PI*2); ctx.fill();
+
+  // 腮红
+  ctx.fillStyle = blush;
+  ctx.beginPath(); ctx.arc(cx - 10, headY + 6, 3.6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 10, headY + 6, 3.6, 0, Math.PI*2); ctx.fill();
+
+  // 嘴（w 形）
+  ctx.strokeStyle = OUT; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx + e - 3, headY + 6);
+  ctx.quadraticCurveTo(cx + e - 1.5, headY + 8.5, cx + e, headY + 6);
+  ctx.quadraticCurveTo(cx + e + 1.5, headY + 8.5, cx + e + 3, headY + 6);
+  ctx.stroke();
+}
+
+function drawOverlay() {
+  ctx.fillStyle = 'rgba(0,0,0,.55)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+  if (won) {
+    ctx.font = 'bold 38px sans-serif';
+    ctx.fillText('🎉 全部通关！', canvas.width/2, canvas.height/2 - 24);
+    ctx.font = '20px sans-serif';
+    ctx.fillText('一二和布布一起完成了冒险！', canvas.width/2, canvas.height/2 + 22);
+    ctx.font = '16px sans-serif';
+    ctx.fillText('点击画面再来一次', canvas.width/2, canvas.height/2 + 56);
+  } else {
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillText(`第 ${curLevel+1} 关`, canvas.width/2, canvas.height/2 - 30);
+    ctx.font = '17px sans-serif';
+    ctx.fillText('准备好，点击画面开始！', canvas.width/2, canvas.height/2 + 4);
+  }
+}
+
+function updateStatus() {
+  const need = switches.length;
+  const done = need && activatedCount === need ? '✔ 大门已开启，快去！' : '';
+  statusEl.textContent = `第 ${curLevel+1} 关 · 开关 ${activatedCount}/${need} ${done}`;
+}
+
+function win() {
+  running = false;
+  if (curLevel + 1 < LEVELS.length) {
+    won = false;
+    setTimeout(() => { loadLevel(curLevel + 1); running = true; }, 400);
+  } else {
+    won = true;
+  }
+}
+
+/* ================= 主循环 ================= */
+let last = 0;
+function loop(t) {
+  const dt = Math.min((t - last) / 1000, 0.05);
+  last = t;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ================= 交互 ================= */
+canvas.addEventListener('click', () => {
+  if (won) { loadLevel(0); running = true; return; }
+  if (!running) running = true;
+});
+retryBtn.addEventListener('click', () => { loadLevel(0); running = true; won = false; });
+
+/* ================= 启动 ================= */
+loadSprites();
+loadLevel(0);
+updateStatus();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

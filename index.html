@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>一二 &amp; 布布 · 双人闯关</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%95%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+<script>
+// 早期资源预载：与 CSS/JS 解析并行下载角色贴图，缩短首帧等待。
+// 正面图必载；侧面图按存档所选皮肤只载对应一张（避免预载未用皮肤浪费带宽）。
+(function () {
+  var skin = 'classic';
+  try {
+    var s = JSON.parse(localStorage.getItem('onetwobubu_save_v1') || '{}');
+    if (s.settings && s.settings.skin === 'outing') skin = 'outing';
+  } catch (e) {}
+  var srcs = ['一二.png', '布布.png'].concat(skin === 'outing'
+    ? ['img/微信图片_20260917172505_169_32.jpg', 'img/微信图片_20260917172503_168_32.jpg']
+    : ['一二侧面.png', '布布侧面.png']);
+  for (var i = 0; i < srcs.length; i++) {
+    var l = document.createElement('link');
+    l.rel = 'preload'; l.as = 'image'; l.href = srcs[i];
+    document.head.appendChild(l);
+  }
+})();
+</script>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game"></canvas>
+    <div id="overlay" class="hidden"><div class="title">第 1 关</div><div class="sub">点击画面开始</div><div class="grade" id="gradeBox"></div><div class="detail" id="detailBox"></div></div>
+    <div id="subTrans"><div class="st-inner"><div class="st-name"></div><div class="st-sub"></div></div></div>
+    <div id="netBar"><span class="dot" id="netDot"></span><span id="netBarText"></span></div>
+
+    <!-- 开场标题界面 -->
+    <div id="titleScreen" class="screen">
+      <span class="float-heart" style="left:12%;animation-delay:0s;font-size:18px">💗</span>
+      <span class="float-heart" style="left:28%;animation-delay:2.4s;font-size:24px">💕</span>
+      <span class="float-heart" style="left:52%;animation-delay:4.1s;font-size:16px">❤</span>
+      <span class="float-heart" style="left:73%;animation-delay:1.3s;font-size:22px">💖</span>
+      <span class="float-heart" style="left:88%;animation-delay:3.4s;font-size:18px">💘</span>
+      <div class="game-title">一二 &amp; 布布</div>
+      <div class="game-sub">· 双人合作闯关 ·</div>
+      <div class="menu-btns">
+        <button class="mbtn primary wide" id="playBtn">开始游戏</button>
+        <button class="mbtn wide" id="continueBtn" style="display:none">继续冒险</button>
+        <button class="mbtn wide" id="netBtn">双人联机</button>
+        <button class="mbtn" id="mapBtn">🗺 关卡地图</button>
+        <button class="mbtn" id="loveBtn" style="background:linear-gradient(135deg,#ff8fb3,#ff6f9c)">💕 恋爱空间</button>
+        <button class="mbtn" id="photoBtn">📷 小熊合照</button>
+        <button class="mbtn" id="helpBtn">📖 游戏规则</button>
+        <button class="mbtn wide" id="settingsBtn">设 置</button>
+      </div>
+      <div class="progress-line" id="progressLine"></div>
+      <div class="album-banner hidden" id="albumBanner"></div>
+    </div>
+
+    <!-- 关卡选择界面 -->
+    <div id="levelScreen" class="screen hidden">
+      <div class="screen-title">选择关卡</div>
+      <div class="screen-tip">完成当前关卡解锁下一关 · 悬停查看关卡缩略图 · ★ 难度 · 角标为历史最佳评级</div>
+      <div class="lv-grid" id="lvGrid"></div>
+      <button class="mbtn back" id="levelBackBtn">返 回</button>
+    </div>
+
+    <!-- 联机大厅 -->
+    <div id="netScreen" class="screen hidden">
+      <div class="screen-title">双人联机</div>
+      <div class="net-form">
+        <label>服务器地址 <input id="netAddr" type="text" spellcheck="false"></label>
+        <label>我的角色
+          <select id="netChar"><option value="0">一二（水·白熊猫）</option><option value="1">布布（火·棕小熊）</option></select>
+        </label>
+        <div class="net-row">
+          <button class="mbtn primary" id="netCreateBtn">创建房间</button>
+          <span id="netRoomShow" class="net-room"></span>
+        </div>
+        <div class="net-row">
+          <input id="netJoinCode" type="text" maxlength="4" placeholder="房间码" spellcheck="false">
+          <button class="mbtn" id="netJoinBtn">加入房间</button>
+        </div>
+        <div class="net-status" id="netStatus">未连接</div>
+        <details class="net-help">
+          <summary>联机帮助</summary>
+          <div class="net-help-body">
+            · 局域网：房主启动游戏后，队友在浏览器打开「服务器地址」栏提示的局域网 IP 即可<br>
+            · 互联网：需把项目文件夹部署到一台公网 Node 服务器（node server.js），双方都填该服务器地址；或用 ngrok / frp 内网穿透 8765 端口<br>
+            · 主机运行游戏逻辑，客机显示插值画面；断线后客机自动重连，主机等待队友<br>
+            · 联机中按 Esc/P 双方同步暂停；重开本关/换关由主机发起
+          </div>
+        </details>
+        <details class="net-help">
+          <summary>网络参数</summary>
+          <div class="net-help-body">
+            <label>快照频率 <select id="netRate"><option value="10">10 Hz</option><option value="20" selected>20 Hz</option><option value="30">30 Hz</option></select></label>
+            <label>渲染延迟 <select id="netDelay"><option value="50">50 ms</option><option value="100" selected>100 ms</option><option value="150">150 ms</option></select></label>
+          </div>
+        </details>
+      </div>
+      <button class="mbtn back" id="netBackBtn">返 回</button>
+    </div>
+
+    <!-- 选层界面（多层级关卡） -->
+    <div id="subPick" class="screen hidden">
+      <div class="screen-title" id="spTitle">选择层级</div>
+      <div class="screen-tip">逐层递进 · 通过当前层解锁下一层 · 已到达的层可随时回访</div>
+      <div class="sp-list" id="spList"></div>
+      <button class="mbtn back" id="spBackBtn">返 回</button>
+    </div>
+
+    <!-- 层级地图导航 -->
+    <div id="mapScreen" class="screen hidden">
+      <div class="screen-title">关卡地图</div>
+      <div class="map-summary" id="mapSummary"></div>
+      <div class="map-list" id="mapList"></div>
+      <div class="map-legend">🟢 已通过层 · 🟡 已到达未通过 · ⭕ 未解锁 · 黄框 = 当前所在关</div>
+      <button class="mbtn back" id="mapBackBtn">返 回</button>
+    </div>
+
+    <!-- 恋爱空间（情侣任务线 + 好感成长） -->
+    <div id="loveScreen" class="screen hidden">
+      <div class="screen-title" style="color:#ff8fb3">💕 恋爱空间</div>
+      <div class="love-head" id="loveHead"></div>
+      <div class="love-bar-wrap"><div class="love-bar" id="loveBar"></div></div>
+      <div class="love-bar-txt" id="loveBarTxt"></div>
+      <div class="love-perk" id="lovePerk"></div>
+      <div class="love-qs" id="loveQs"></div>
+      <div class="love-stats" id="loveStats"></div>
+      <button class="mbtn album" id="albumBtn">📖 我们的纪念册</button>
+      <button class="mbtn back" id="loveBackBtn">返 回</button>
+    </div>
+
+    <!-- 纪念册（情侣游戏历程） -->
+    <div id="albumScreen" class="screen hidden">
+      <div class="screen-title" style="color:#ffc9dd">📖 我们的纪念册</div>
+      <div class="screen-tip" id="albumTip"></div>
+      <div class="album-body">
+        <div class="album-card" id="albumOverview"></div>
+        <div class="album-card">
+          <div class="album-h">🏅 称号墙</div>
+          <div class="title-grid" id="titleGrid"></div>
+        </div>
+        <div class="album-card">
+          <div class="album-h">🎊 恋爱纪念日</div>
+          <div class="anni-row" id="anniRow"></div>
+        </div>
+        <div class="album-card">
+          <div class="album-h">⏳ 时光轴</div>
+          <div class="moment-list" id="momentList"></div>
+        </div>
+      </div>
+      <button class="mbtn back" id="albumBackBtn">返 回</button>
+    </div>
+
+    <!-- 小熊合照收藏界面 -->
+    <div id="photoScreen" class="screen hidden">
+      <div class="screen-title" style="color:#ffd9a0">📷 小熊合照</div>
+      <div class="screen-tip" id="photoTip">每通过一个主关卡，解锁一张一二 &amp; 布布的合照纪念</div>
+      <div class="ph-grid" id="phGrid"></div>
+      <button class="mbtn back" id="photoBackBtn">返 回</button>
+    </div>
+
+    <!-- 合照大图预览 -->
+    <div id="photoView" class="hidden">
+      <div class="pv-frame"><img id="pvImg" alt="合照预览"><div class="pv-cap" id="pvCap"></div></div>
+      <div class="pv-hint">点击空白处关闭 · ← → 切换</div>
+    </div>
+
+    <!-- 通关瞬间合照弹出 -->
+    <div id="photoReveal" class="hidden">
+      <div class="pr-title">📷 解锁新合照！</div>
+      <div class="pv-frame"><img id="prImg" alt="新合照"><div class="pv-cap" id="prCap"></div></div>
+      <div class="pv-hint">点击收入相册 · 主菜单「📷 小熊合照」可随时回看</div>
+    </div>
+
+    <!-- 游戏规则界面 -->
+    <div id="helpScreen" class="screen hidden">
+      <div class="screen-title">游戏规则</div>
+      <div class="screen-tip">双人合作 · 各控一角 · 同到出口过关 · 点击目录快速跳转</div>
+      <div class="help-toc" id="helpToc">
+        <button class="toc-btn" data-sec="h-ctrl">🎮 操作</button>
+        <button class="toc-btn" data-sec="h-elem">💧 属性克制</button>
+        <button class="toc-btn" data-sec="h-trap">⚙️ 机关</button>
+        <button class="toc-btn" data-sec="h-coop">🟪 多层协作</button>
+        <button class="toc-btn" data-sec="h-boss">👑 Boss 破核</button>
+        <button class="toc-btn" data-sec="h-collect">⭐ 收集评分</button>
+        <button class="toc-btn" data-sec="h-love">💕 情侣默契</button>
+        <button class="toc-btn" data-sec="h-struct">🗺 关卡结构</button>
+      </div>
+      <div class="help-body" id="helpBody">
+        <div class="help-sec" id="h-ctrl">
+          <div class="help-h">🎮 操作</div>
+          <div><b class="p1">一二</b>（水·白熊猫）A 左 / D 右 / W 跳　　<b class="p2">布布</b>（火·棕小熊）← 左 / → 右 / ↑ 跳　　R 重开本关 · Esc / P 暂停 · T 切换移动形象</div>
+        </div>
+        <div class="help-sec" id="h-elem">
+          <div class="help-h">💧 属性克制</div>
+          <div>水池只有一二能走 · 岩浆只有布布能走 · 毒液 / 尖刺 / 火焰 / 史莱姆两人都危险 · 虚影门只有对应属性能穿 · 冰面会打滑</div>
+        </div>
+        <div class="help-sec" id="h-trap">
+          <div class="help-h">⚙️ 机关</div>
+          <div>移动平台会载人 · 木箱推上按钮可开门 · 定时火焰要卡时机通过</div>
+          <div><b style="color:#b9aef0">🌀 重力反转</b>：踏入紫色重力区后重力会反转，你会<b>飘向天花板</b>行走；反转状态下按跳跃键会向<b>下方</b>跳，小心别掉出世界；走出区域重力立即恢复，善用它在天花板上绕过深渊</div>
+          <div style="margin-top:6px"><b style="color:#ff9ec6">💕 心之试炼新机关</b>（第 20~23 章专属）：</div>
+          <div><b style="color:#c9a0d8">同心连压板</b>：两块紫色压力板成对出现，<b>两人各站一块</b>才会开启配对的金色门，一人离开门立即关闭</div>
+          <div><b style="color:#ff6f9c">心之桥</b>：深渊上漂浮的粉色桥砖，<b>两人保持牵手距离</b>（靠近彼此）才会实体化，走散了桥就消失——牵着手一起过桥</div>
+          <div><b style="color:#e08fb8">平衡升降台</b>：粉金色平台，<b>两人同时站上去</b>才会匀速上升，一人离开就停、两人都离开缓缓降回原位</div>
+          <div><b style="color:#ff8a3c">节奏火墙</b>：全局同拍的火墙，亮 1.2 秒 / 灭 2.4 秒，<b>熄灭前底座会闪烁预警</b>，两人踩着同一节奏一起穿越</div>
+        </div>
+        <div class="help-sec" id="h-coop">
+          <div class="help-h">🟪 多层与协作</div>
+          <div><b style="color:#b9aef0">紫色弹跳台</b>：两人<b>同时站上去</b>蓄力，蓄力条满后会<b>一起高高弹起</b>，可跳上二层 / 三层平台（单人站上去不会蓄力，普通跳够不到）；弹跳中在空中按方向键可以微调落点</div>
+          <div><b style="color:#ffd54a">金色悬空平台</b>：可以从下方穿过，只有从上面落下才能站稳</div>
+        </div>
+        <div class="help-sec" id="h-boss">
+          <div class="help-h">👑 Boss · 属性破核</div>
+          <div>Boss 每次攻击后短暂<b>虚弱</b>，露出<b>冰蓝核</b>或<b>火焰核</b></div>
+          <div>蓝核要用<b class="p2">布布（火）</b>去撞、火核要用<b class="p1">一二（水）</b>去撞，属性对了才掉血</div>
+          <div>Boss 的<b>冰弹 / 火浪</b>都贴地飞来，<b>跳起</b>即可躲开；抓虚弱窗口让对应属性角色冲上去撞核，破核 <b>6 次</b>即胜</div>
+        </div>
+        <div class="help-sec" id="h-collect">
+          <div class="help-h">⭐ 收集与评分</div>
+          <div>一二爱吃🍰小蛋糕、布布爱喝🧋奶茶——蓝色甜品只有一二能吃、橙色甜品只有布布能喝，星星藏在路上和暗处 · 过关按用时、收集数、死亡次数综合评 S / A / B / C · 首次通过每层 +1 星</div>
+        </div>
+        <div class="help-sec" id="h-love">
+          <div class="help-h">💕 情侣默契</div>
+          <div><b style="color:#ff9ec6">爱心水晶</b>藏在关卡中，碰到即收集（好感+5，同一关最多计入 3 次） · <b style="color:#ff9ec6">爱心护盾</b>：两人同时按跳触发短暂无敌 · <b style="color:#ff9ec6">牵手同行</b>：两人靠近同向奔跑会互相加速 · 好感升级解锁头顶爱心印记外观 · 爱情任务为<b style="color:#ff9ec6">层级递进制</b>（每类 3~4 阶，前一阶达成后下一阶才生效），任务与好感进度在主菜单「💕 恋爱空间」查看</div>
+        </div>
+        <div class="help-sec" id="h-struct">
+          <div class="help-h">🗺 关卡结构</div>
+          <div>共 <b>23 个主关卡 / 40 层</b>：前 5 关为单层平面教学 · 第 6 关起每关含 2~3 层平台，需协作跳跃上下层 · 多层主关逐层推进，进度自动保存在本浏览器</div>
+          <div><b style="color:#ff9ec6">💕 恋爱终章</b>：爱之圣殿之后还有 4 个隐藏章节（心之回廊 / 默契圣殿 / 双生之塔 / 永恒之约），需要好感度达到 <b>340 / 520 / 760 / 1060</b> 才能进入——每层首通额外 +15 好感，是情侣玩家的长线试炼</div>
+        </div>
+      </div>
+      <button class="mbtn back" id="helpBackBtn">返 回</button>
+    </div>
+
+    <!-- 设置界面 -->
+    <div id="settingsScreen" class="screen hidden">
+      <div class="screen-title">设置</div>
+      <label class="set-row"><input type="checkbox" id="sfxToggle"> 音效提示（跳跃 / 死亡 / 过关）</label>
+      <div class="set-row vol"><span class="vol-ic">🔊</span><input type="range" id="volSfxSlider" min="0" max="100" step="5"><span class="vol-val" id="volSfxVal">100%</span></div>
+      <label class="set-row"><input type="checkbox" id="musicToggle" checked> 背景音乐（轻快旋律）</label>
+      <div class="set-row vol"><span class="vol-ic">🎵</span><input type="range" id="volMusicSlider" min="0" max="100" step="5"><span class="vol-val" id="volMusicVal">100%</span></div>
+      <div class="set-row bgm-row">🎧 背景音乐
+        <select id="bgmSelect" class="bgm-select">
+          <option value="exclusive">🐼 一二布布专属bgm（7 首顺序播放）</option>
+          <option value="classic">🎼 原版经典旋律</option>
+        </select>
+      </div>
+      <div class="set-tip" style="margin-top:-4px">专属bgm 按列表顺序自动切换（不含原版），原版经典旋律单曲循环；切换时平滑过渡</div>
+      <div class="set-row bgm-row">📱 触屏按键
+        <select id="touchSelect" class="bgm-select">
+          <option value="auto">自动（触屏设备显示）</option>
+          <option value="on">总是显示</option>
+          <option value="off">关闭</option>
+        </select>
+      </div>
+      <label class="set-row"><input type="checkbox" id="hudToggle" checked> 显示游戏信息栏</label>
+      <div class="set-row skin-row">移动形象（侧面）
+        <span class="skin-btns">
+          <button class="skin-btn" id="skinClassic">经典</button>
+          <button class="skin-btn" id="skinOuting">郊游</button>
+        </span>
+      </div>
+      <div class="set-tip" style="margin-top:-4px">游戏中按 <kbd>T</kbd> 也可快速切换</div>
+      <div class="key-guide">
+        <div class="kg-h">⌨️ 操作按键</div>
+        <div class="kg-row"><b class="p1">一二</b>（水·白熊猫）<span class="kg-keys"><kbd>A</kbd><kbd>D</kbd><kbd>W</kbd></span>左 / 右 / 跳</div>
+        <div class="kg-row"><b class="p2">布布</b>（火·棕小熊）<span class="kg-keys"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd></span>左 / 右 / 跳</div>
+        <div class="kg-row">通用<span class="kg-keys"><kbd>R</kbd><kbd>Esc</kbd><kbd>P</kbd><kbd>T</kbd></span>重开本关 / 暂停 / 暂停 / 切换移动形象</div>
+      </div>
+      <div class="set-tip">进度自动保存在本浏览器中</div>
+      <button class="mbtn" id="unlockAllBtn" style="background:#8aa5e8">解锁全部关卡（测试用）</button>
+      <button class="mbtn danger" id="resetProgressBtn">清空全部进度</button>
+      <button class="mbtn back" id="settingsBackBtn">返 回</button>
+    </div>
+  </div>
+  <div id="hud"></div>
+  <div class="ctrls">
+    <button class="btn home" id="homeBtn">⌂ 返回主页</button>
+    <button class="btn" id="retryBtn">重开本关</button>
+    <button class="btn" id="menuBtn" style="background:#8aa5e8">选择关卡</button>
+  </div>
+  <div id="pauseMenu" class="screen hidden">
+    <div class="game-title" style="font-size:34px">⏸ 已暂停</div>
+    <button class="btn" id="resumeBtn" style="margin-top:18px">继续游戏</button>
+    <button class="btn" id="pauseMapBtn" style="background:#8aa5e8">🗺 关卡地图</button>
+    <button class="btn" id="pauseHomeBtn" style="background:#8aa5e8">返回主菜单</button>
+    <div style="margin-top:12px;font-size:12px;opacity:.7">按 Esc 或 P 键也可继续游戏</div>
+  </div>
+
+  <!-- 触屏虚拟按键层（挂在 #wrap 外，fixed 全屏层；仅 play 界面显示） -->
+  <div id="touchLayer" class="hidden">
+    <button class="tpad tp-pause" id="tpPause">⏸</button>
+    <div class="tpad-grp tp-left">
+      <button class="tpad" id="tpLeft" data-act="left">◀</button>
+      <button class="tpad" id="tpRight" data-act="right">▶</button>
+    </div>
+    <div class="tpad-grp tp-right">
+      <button class="tpad tp-switch" id="tpSwitch">🔄 一二</button>
+      <button class="tpad" id="tpJump" data-act="jump">⬆</button>
+    </div>
+    <div id="rotateHint">📱 建议横屏游玩</div>
+  </div>
+
+<script src="levels.js"></script>
+<script src="audio.js"></script>
+<script src="ui.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
+

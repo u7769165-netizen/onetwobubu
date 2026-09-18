@@ -1,0 +1,6 @@
+node_modules/
+tests/profile*/
+tests/pA/
+tests/pB/
+%USERP~1/
+_legacy/backup_*/
