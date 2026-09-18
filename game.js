@@ -1333,6 +1333,16 @@ function updateCamera(dt) {
   if (Math.abs(camX - target) < 0.3) camX = target;
 }
 
+/* 死亡统一处理：置死、计数、音效、提示、延迟重载本层。
+   调用方自行决定是否 return（超时死亡需 return，危险死亡不 return 以便同帧继续判通关）。 */
+function triggerDeath(title, sub) {
+  dead = true;
+  deaths++;
+  sfxDeath();
+  showOverlay(title, sub);
+  setTimeout(() => { if (screenMode === 'play' && dead) loadLevel(curLevel, true); }, 700);
+}
+
 /* ================= 主更新 ================= */
 function tick() {
   if (paused) return;
@@ -1391,21 +1401,11 @@ function tick() {
   /* 每层时间限制：高层级主关卡超时即死亡重置 */
   const lim = LEVEL_LIMIT[curLevel];
   if (lim && levelTime >= lim) {
-    dead = true;
-    deaths++;
-    sfxDeath();
-    showOverlay('⏳ 时间到！', `限时 ${lim}s · 重置中...`);
-    setTimeout(() => { if (screenMode === 'play' && dead) loadLevel(curLevel, true); }, 700);
+    triggerDeath('⏳ 时间到！', `限时 ${lim}s · 重置中...`);
     return;
   }
 
-  if (checkHazards()) {
-    dead = true;
-    deaths++;
-    sfxDeath();
-    showOverlay('哎呀！', '重置中...');
-    setTimeout(() => { if (screenMode === 'play' && dead) loadLevel(curLevel, true); }, 700);
-  }
+  if (checkHazards()) triggerDeath('哎呀！', '重置中...');
 
   if (checkExit()) {
     won = true;
@@ -1573,41 +1573,36 @@ function drawTiles(theme) {
   }
 }
 
-function drawPools() {
-  const wave = (x, y, w, amp) => {
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    for (let i = 0; i <= w; i += 4) {
-      ctx.lineTo(x + i, y + Math.sin(animT * 3 + (x + i) * 0.09) * amp);
+/* 液面波纹路径（animT 驱动的正弦波） */
+function poolWave(x, y, w, amp) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let i = 0; i <= w; i += 4) {
+    ctx.lineTo(x + i, y + Math.sin(animT * 3 + (x + i) * 0.09) * amp);
+  }
+}
+
+/* 一类液池的统一绘制：水体填充 + 波纹描边；岩浆额外带上升气泡 */
+function drawPool(list, fill, stroke, bubbles) {
+  for (const p of list) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(p.x, p.y + 8, p.w, p.h - 8);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 3;
+    poolWave(p.x, p.y + 8, p.w, 2);
+    ctx.stroke();
+    if (bubbles) {
+      ctx.fillStyle = 'rgba(255,220,150,.8)';
+      const bx = p.x + ((animT * 30 + p.x) % p.w);
+      ctx.beginPath(); ctx.arc(bx, p.y + p.h - 10, 3, 0, Math.PI * 2); ctx.fill();
     }
-  };
-  for (const p of waters) {
-    ctx.fillStyle = 'rgba(96,170,255,.8)';
-    ctx.fillRect(p.x, p.y + 8, p.w, p.h - 8);
-    ctx.strokeStyle = 'rgba(210,238,255,.95)';
-    ctx.lineWidth = 3;
-    wave(p.x, p.y + 8, p.w, 2);
-    ctx.stroke();
   }
-  for (const p of lavas) {
-    ctx.fillStyle = 'rgba(255,120,50,.88)';
-    ctx.fillRect(p.x, p.y + 8, p.w, p.h - 8);
-    ctx.strokeStyle = 'rgba(255,210,120,.95)';
-    ctx.lineWidth = 3;
-    wave(p.x, p.y + 8, p.w, 2);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,220,150,.8)';
-    const bx = p.x + ((animT * 30 + p.x) % p.w);
-    ctx.beginPath(); ctx.arc(bx, p.y + p.h - 10, 3, 0, Math.PI * 2); ctx.fill();
-  }
-  for (const p of toxins) {
-    ctx.fillStyle = 'rgba(150,90,220,.8)';
-    ctx.fillRect(p.x, p.y + 8, p.w, p.h - 8);
-    ctx.strokeStyle = 'rgba(220,180,255,.9)';
-    ctx.lineWidth = 3;
-    wave(p.x, p.y + 8, p.w, 2);
-    ctx.stroke();
-  }
+}
+
+function drawPools() {
+  drawPool(waters, 'rgba(96,170,255,.8)', 'rgba(210,238,255,.95)', false);
+  drawPool(lavas, 'rgba(255,120,50,.88)', 'rgba(255,210,120,.95)', true);
+  drawPool(toxins, 'rgba(150,90,220,.8)', 'rgba(220,180,255,.9)', false);
 }
 
 function drawSpikes() {
