@@ -9,7 +9,7 @@ let audioCtx = null;
 function ensureCtx() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   } catch (e) {}
   return audioCtx;
 }
@@ -237,7 +237,7 @@ function updateMusic() {
   if (want && !musicTimer) {
     ensureCtx();
     if (audioCtx) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
       musicNext = audioCtx.currentTime + 0.1; musicStep = 0;
       musicTimer = setInterval(musicTick, 90);
     }

@@ -57,7 +57,11 @@ function loadSave() {
     }
   } catch (e) { /* 读取失败用默认值 */ }
 }
-function persistSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+let _saveWarned = false;   // 存档写入失败只提醒一次，不打扰玩家
+function persistSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+  catch (e) { if (!_saveWarned) { _saveWarned = true; console.warn('存档写入失败（可能超出存储配额）:', e); } }
+}
 
 /* ================= 情侣好感度成长系统 ================= */
 const LOVE_LEVELS = [
