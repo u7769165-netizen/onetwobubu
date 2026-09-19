@@ -44,6 +44,26 @@
 
 ---
 
+## 安卓手机：安装与远程联机
+
+**方式一 · 局域网（同一 WiFi，最快）**
+
+1. 电脑运行 `node server.js`（防火墙已放行 8765 入站；未放行时以管理员执行 `netsh advfirewall firewall add rule name=onetwobubu-game-8765 dir=in action=allow protocol=TCP localport=8765`）。
+2. 手机浏览器打开 `http://<电脑IP>:8765`（IP 见服务器启动日志，如 `http://192.168.118.108:8765`）即玩，虚拟触屏按键自动显示。
+3. 要装独立 App：手机浏览器访问 `http://<电脑IP>:8765/deploy/onetwobubu.apk` 下载安装（需允许「未知来源安装」，debug 签名）。
+
+**方式二 · 互联网异地（无需公网服务器）**
+
+1. 房主电脑：先运行 `node server.js`，再双击 `deploy\启动互联网隧道.bat`，窗口内出现 `https://xxxx.trycloudflare.com` 公网地址（cloudflared 快速隧道，免注册；每次启动地址会变）。
+2. 队友手机浏览器直接打开该链接游玩（联机地址自动填好）；APK 用户在「双人联机 → 服务器地址」填 `wss://xxxx.trycloudflare.com/ws`，连接成功后自动记住。
+3. APK 也可经隧道分发：把 `https://xxxx.trycloudflare.com/deploy/onetwobubu.apk` 发给队友下载安装。
+
+**安全提示**：隧道 URL 为随机域名、关窗即失效，天然限定了访问范围；server.js 本身无鉴权，不要把 8765 端口直接映射到公网。
+
+**重新打包 APK**（改了游戏代码后）：`node deploy\make_www.js` → `npx cap sync android` → `cd android` → `gradlew.bat assembleDebug`，产物在 `android\app\build\outputs\apk\debug\app-debug.apk`（复制到 `deploy\onetwobubu.apk` 分发）。工程为 Capacitor 6 + Android SDK 34，需本机装好 JDK 17 与 `%LOCALAPPDATA%\Android\Sdk`。
+
+---
+
 ## 开发者：代码结构
 
 单页应用，拆分为 1 个 HTML + 1 个 CSS + 9 个 JS，全部共享同一全局作用域（无模块系统）。`index.html` 中 `<script>` 的加载顺序即依赖顺序：

@@ -1,0 +1,8 @@
+{
+  "appId": "com.onetwobubu.game",
+  "appName": "一二 & 布布",
+  "webDir": "www",
+  "server": {
+    "allowMixedContent": true
+  }
+}

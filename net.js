@@ -41,6 +41,7 @@ function netConnect(action, room) {
   net.ws.onopen = () => {
     net.connected = true; net.retryT = 1000;
     clearTimeout(net.reconnectTimer);
+    try { localStorage.setItem('onetwobubu_net_addr', url); } catch (e) {}
     netSend(net.want.action === 'create' ? { t: 'create', room } : { t: 'join', room });
   };
   net.ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } netOnMsg(m); };

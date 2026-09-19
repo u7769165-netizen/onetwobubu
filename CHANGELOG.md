@@ -2,6 +2,13 @@
 
 轻量记录每轮主要改动（倒序）。完整设计决策见代码注释与 `README.md`。
 
+## 2026-09-20 · 安卓部署与互联网联机
+
+- **APK 打包**：引入 Capacitor 6（部署层，不改游戏代码结构）——`capacitor.config.json`（appId com.onetwobubu.game，allowMixedContent 兼容 ws/wss）、`deploy\make_www.js`（拷贝 17 项静态资源到 www/）、`android/` 工程（Gradle 8.2.1 腾讯镜像 + 阿里云 Maven 镜像）；debug 签名 APK 约 17MB，经 `http://<IP>:8765/deploy/onetwobubu.apk` 直接分发安装
+- **互联网联机**：`deploy\cloudflared.exe` 快速隧道（免注册）把 8765 暴露为 `https://xxx.trycloudflare.com`；`deploy\启动互联网隧道.bat` 一键启动；`deploy\ws_tunnel_test.js` 零依赖 wss 中继验证（建房/加入/状态透传 PASS）
+- **客户端小改**：联机大厅地址在 file:/localhost 场景（APK）自动回填上次成功连接的地址（localStorage `onetwobubu_net_addr`），网页版仍按 location 派生；联机帮助文案更新为隧道/公网/APK 三种场景
+- **网络**：防火墙 8765 入站规则 `onetwobubu-game-8765`（已添加）；README 新增「安卓手机：安装与远程联机」章节（局域网/互联网两方式 + 安全提示 + 重打包流程）
+
 ## 2026-09-19 · 系统性架构与代码优化（game.js 拆分）
 
 - **基线与工具**：git init 建立回滚基线；新增 `_extract_globals.js`（espree AST 提取浏览器侧顶层声明名 → `_globals.json`，供 eslint.config.js 注入 globals，跨文件引用 no-undef 防线可复现），`npm run globals` 脚本

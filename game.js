@@ -645,7 +645,13 @@ window.addEventListener('keydown', e => {
 
 /* ---------- 联机大厅事件 ---------- */
 const netAddrEl = document.getElementById('netAddr');
-netAddrEl.value = (location.protocol === 'file:' ? 'ws://127.0.0.1:8765/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+(function () {
+  var def = location.protocol === 'file:' ? 'ws://127.0.0.1:8765/ws' : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+  var local = location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  var saved = '';
+  try { saved = localStorage.getItem('onetwobubu_net_addr') || ''; } catch (e) {}
+  netAddrEl.value = (local && saved) ? saved : def;
+})();
 document.getElementById('netBtn').addEventListener('click', () => showScreen('net'));
 document.getElementById('netBackBtn').addEventListener('click', () => { if (net.mode === 'online') netLeave(); showScreen('title'); });
 document.getElementById('netCreateBtn').addEventListener('click', () => {

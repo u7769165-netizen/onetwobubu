@@ -85,7 +85,9 @@
           <summary>联机帮助</summary>
           <div class="net-help-body">
             · 局域网：房主启动游戏后，队友在浏览器打开「服务器地址」栏提示的局域网 IP 即可<br>
-            · 互联网：需把项目文件夹部署到一台公网 Node 服务器（node server.js），双方都填该服务器地址；或用 ngrok / frp 内网穿透 8765 端口<br>
+            · 互联网（无公网服务器）：房主电脑运行 <code>node server.js</code> 后，再运行 <code>deploy\cloudflared.exe tunnel --url http://localhost:8765</code>，把显示的 <code>https://xxx.trycloudflare.com</code> 发给队友；队友浏览器直接打开该链接游玩（地址自动填好），APK 用户则在「服务器地址」填 <code>wss://xxx.trycloudflare.com/ws</code><br>
+            · 互联网（有公网服务器）：把项目文件夹部署到公网 Node 服务器（node server.js），双方都填该服务器地址；页面走 https 时自动用 wss<br>
+            · 安卓 APK 内置游戏资源可离线单人玩；联机需手填房主地址（局域网 <code>ws://电脑IP:8765/ws</code> 或上面的隧道 wss 地址），连接成功后自动记住<br>
             · 主机运行游戏逻辑，客机显示插值画面；断线后客机自动重连，主机等待队友<br>
             · 联机中按 Esc/P 双方同步暂停；重开本关/换关由主机发起
           </div>
