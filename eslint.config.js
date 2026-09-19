@@ -37,7 +37,7 @@ try {
 
 module.exports = [
   {
-    files: ['levels.js', 'audio.js', 'ui.js', 'render.js', 'game.js'],
+    files: ['levels.js', 'audio.js', 'ui.js', 'mechanics.js', 'render.js', 'game.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'script',
