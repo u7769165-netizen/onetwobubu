@@ -14,6 +14,7 @@ const BROWSER_FILES = [
   'levels.js',
   'audio.js',
   'ui.js',
+  'save.js',
   'mechanics.js',
   'render.js',
   'game.js',
