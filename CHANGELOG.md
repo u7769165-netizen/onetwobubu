@@ -2,6 +2,15 @@
 
 轻量记录每轮主要改动（倒序）。完整设计决策见代码注释与 `README.md`。
 
+## 2026-09-19 · 系统性架构与代码优化（game.js 拆分）
+
+- **基线与工具**：git init 建立回滚基线；新增 `_extract_globals.js`（espree AST 提取浏览器侧顶层声明名 → `_globals.json`，供 eslint.config.js 注入 globals，跨文件引用 no-undef 防线可复现），`npm run globals` 脚本
+- **文件内去重**（行为零变化）：提取 `triggerDeath` 统一 tick 两处死亡处理；提取 `drawPool/poolWave` 统一 waters/lavas/toxins 三段液面绘制
+- **错误处理加固**：audio.js 两处 `audioCtx.resume()` 补 `.catch(() => {})`（消除自动播放策略下 unhandledrejection 噪声）；persistSave 配额超限一次性 `console.warn`
+- **game.js 拆分（2752 → 681 行）**：按职责拆出 5 个新文件——`render.js`（渲染 821 行）、`mechanics.js`（物理机关 545 行）、`save.js`（存档成长 213 行）、`sprites.js`（贴图 210 行）、`net.js`（联机 286 行）；加载顺序 levels→audio→ui→save→sprites→mechanics→render→net→game，index.html / eslint files / 提取脚本三处同步；只搬声明不搬逻辑，函数体引用均运行时求值
+- **性能**：`updateHUD` 增加 `_hudLast` 文本缓存，60Hz 帧中内容不变即跳过 DOM 写（逐字符等价）；`bench_perf post` 对比基线无回退（fps 持平、Boss render 略优）
+- **验证**：每子步固定守护链（globals 名单 diff → lint → smoke → 针对性回归 → commit）；收尾全量 `npm test` 15/15 全绿；lovechapters 源码断言随拆分改 fetch net.js
+
 ## 2026-09-19 · 触屏虚拟按键（移动端操控）
 
 - **虚拟按键层**：`#touchLayer` fixed 全屏层挂在 `#wrap` 外（z-index 4 < 界面 5，暂停菜单自动盖住按键；层本体 pointer-events:none 仅按键可点，结构上杜绝误触 wrap click）——左下 ◀▶ 方向键、右下 ⬆ 跳跃键（88×88px 圆形，按下缩放+高亮反馈）、左上 ⏸ 暂停钮（56px）、跳跃键上方 🔄 换角色钮（单人本地切换控制一二/布布，联机自动隐藏）

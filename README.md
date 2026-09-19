@@ -46,10 +46,10 @@
 
 ## 开发者：代码结构
 
-单页应用，拆分为 1 个 HTML + 1 个 CSS + 4 个 JS，全部共享同一全局作用域（无模块系统）。`index.html` 中 `<script>` 的加载顺序即依赖顺序：
+单页应用，拆分为 1 个 HTML + 1 个 CSS + 9 个 JS，全部共享同一全局作用域（无模块系统）。`index.html` 中 `<script>` 的加载顺序即依赖顺序：
 
 ```
-index.html   HTML 骨架 + <link> + 4 个 <script>
+index.html   HTML 骨架 + <link> + 9 个 <script>
 style.css    全部样式
    ↓ JS（按序加载，后者可用前者声明）
 levels.js    关卡数据与配置：地图符号表、物理常量(TILE/GRAVITY/JUMP…)、
@@ -57,9 +57,17 @@ levels.js    关卡数据与配置：地图符号表、物理常量(TILE/GRAVITY
 audio.js     WebAudio：音效(beep/sfx*) + 文件 BGM 两选项选曲(bgm/ 8 轨：专属 7 曲顺序播放
              / 原版循环，轨间交叉渐变) + 程序化背景音乐(旋律/贝斯/浪漫轨，文件不可用时的回退)
 ui.js        界面：DOM 引用、showScreen 状态机、选关/地图/恋爱空间/纪念册/
-             合照界面、高清渲染(DPR)、暂停、贴图抠图、HUD
-game.js      核心：存档与好感系统、爱情任务、关卡载入、物理与机关、tick、
-             渲染、主循环、联机协议、交互事件绑定、启动
+             合照界面、高清渲染(DPR)、暂停、HUD
+save.js      存档与好感：loadSave/persistSave、好感数值与称号、
+             爱情任务线、纪念册数据、recordWin 与解锁推进
+sprites.js   角色贴图：正/侧贴图加载、cutout() 抠图、皮肤切图
+mechanics.js 物理与机关：stepPlayer/碰撞、按钮/门/箱子、移动平台/史莱姆/Boss、
+             危险判定、胜利检查、评分、动画与相机
+render.js    渲染：drawBackground/drawTiles/全部 draw*/drawPlayer/render
+net.js       联机：net 状态对象/netSend、连接管理、主机广播、
+             客机插值、联机状态条
+game.js      核心编排：玩法调参常量、关卡载入、输入(键盘/触屏)、
+             tick、主循环、交互事件绑定、启动
 ```
 
 > ⚠️ `game.js` 末尾的「交互事件绑定 + 启动」段在加载时即执行，依赖前面所有文件的函数声明，位置不可前移。
