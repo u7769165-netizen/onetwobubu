@@ -1,80 +1,80 @@
 {
   "tag": "post",
-  "ts": "2026-09-17T10:39:05.914Z",
+  "ts": "2026-09-19T05:48:47.789Z",
   "static": {
     "/": {
-      "first_ms": 6.26,
+      "first_ms": 6.12,
       "status": 200,
-      "bytes": 16886,
-      "revalidate_ms": 1.41,
+      "bytes": 19778,
+      "revalidate_ms": 0.73,
       "revalidate_status": 304
     },
     "/game.js": {
-      "first_ms": 1.1,
+      "first_ms": 0.69,
       "status": 200,
-      "bytes": 109637,
-      "revalidate_ms": 0.77,
+      "bytes": 35301,
+      "revalidate_ms": 0.42,
       "revalidate_status": 304
     },
     "/ui.js": {
-      "first_ms": 1.25,
+      "first_ms": 0.54,
       "status": 200,
-      "bytes": 21947,
-      "revalidate_ms": 0.88,
+      "bytes": 23051,
+      "revalidate_ms": 0.29,
       "revalidate_status": 304
     },
     "/levels.js": {
-      "first_ms": 1.56,
+      "first_ms": 0.48,
       "status": 200,
-      "bytes": 29445,
-      "revalidate_ms": 0.7,
+      "bytes": 39630,
+      "revalidate_ms": 0.3,
       "revalidate_status": 304
     },
     "/audio.js": {
-      "first_ms": 1.02,
+      "first_ms": 0.7,
       "status": 200,
-      "bytes": 5708,
-      "revalidate_ms": 0.81,
+      "bytes": 13223,
+      "revalidate_ms": 0.87,
       "revalidate_status": 304
     },
     "/style.css": {
-      "first_ms": 0.81,
+      "first_ms": 0.72,
       "status": 200,
-      "bytes": 25146,
-      "revalidate_ms": 0.92,
+      "bytes": 27904,
+      "revalidate_ms": 0.28,
       "revalidate_status": 304
     },
     "/一二.png": {
-      "first_ms": 2.06,
+      "first_ms": 21.31,
       "status": 200,
       "bytes": 332825,
-      "revalidate_ms": 0.64,
+      "revalidate_ms": 0.57,
       "revalidate_status": 304
     },
     "/img/微信图片_20260917172505_169_32.jpg": {
-      "first_ms": 1.16,
+      "first_ms": 1.95,
       "status": 200,
       "bytes": 123352,
-      "revalidate_ms": 0.48,
+      "revalidate_ms": 0.37,
       "revalidate_status": 304
     }
   },
   "game": {
     "boss_render": {
-      "avg": 0.182,
+      "avg": 0.159,
       "p95": 0.3,
-      "max": 0.7
+      "max": 0.8
     },
     "maze_render": {
-      "avg": 0.224,
-      "p95": 0.6,
-      "max": 0.9
+      "avg": 0.157,
+      "p95": 0.3,
+      "max": 0.5
     },
     "tick": {
       "avg": 0,
       "p95": 0
     },
-    "fps": 172,
+    "fps": 172.9,
     "heap_mb": 0,
     "nodes": 0
   }
