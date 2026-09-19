@@ -435,6 +435,7 @@ function showOverlay(title, sub, grade, detail) {
 }
 function hideOverlay() { overlay.classList.add('hidden'); }
 
+let _hudLast = '';   // 上一次写入的 HUD 文本：60Hz 调用中绝大多数帧内容不变，跳过相同赋值避免冗余 DOM 写
 function updateHUD() {
   const water = gems.filter(g => g.owner === 0);
   const fire = gems.filter(g => g.owner === 1);
@@ -451,6 +452,7 @@ function updateHUD() {
   }
   const heartsTxt = hearts.length ? ` · 💕${hearts.filter(h => h.got).length}/${hearts.length}` : '';
   const shieldTxt = shieldT > 0 ? ` · 🛡护盾${shieldT.toFixed(1)}s` : '';
-  hud.textContent = `${lvTxt} · ${LEVEL_NAMES[curLevel]} · 🍰${gw}/${water.length} · 🧋${gf}/${fire.length} · ⭐${starsGot}/${starsTotal}${heartsTxt}${timeTxt}${bossHp}${shieldTxt}`;
+  const txt = `${lvTxt} · ${LEVEL_NAMES[curLevel]} · 🍰${gw}/${water.length} · 🧋${gf}/${fire.length} · ⭐${starsGot}/${starsTotal}${heartsTxt}${timeTxt}${bossHp}${shieldTxt}`;
+  if (txt !== _hudLast) { _hudLast = txt; hud.textContent = txt; }
 }
 
