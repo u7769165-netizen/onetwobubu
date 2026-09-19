@@ -186,7 +186,7 @@ let chrome;
   ok(r === 10, `E5 旧章节首通仍 +10（无试炼加成）`, String(r));
 
   /* ===== F. 联机接线（源码断言） ===== */
-  r = await evl(`fetch('game.js').then(t => t.text()).then(txt => { const i = txt.indexOf('function guestFrame');
+  r = await evl(`fetch('net.js').then(t => t.text()).then(txt => { const i = txt.indexOf('function guestFrame');
     return JSON.stringify({ lz: txt.includes('lz:') && txt.includes('m.lz'),
       gb: i >= 0 && txt.slice(i, i + 4000).includes('computeBridgeOn()') }) }).catch(e => 'FETCH_ERR:' + e.message)`);
   o = JSON.parse(r);
