@@ -8,6 +8,7 @@
 - **互联网联机**：`deploy\cloudflared.exe` 快速隧道（免注册）把 8765 暴露为 `https://xxx.trycloudflare.com`；`deploy\启动互联网隧道.bat` 一键启动；`deploy\ws_tunnel_test.js` 零依赖 wss 中继验证（建房/加入/状态透传 PASS）
 - **客户端小改**：联机大厅地址在 file:/localhost 场景（APK）自动回填上次成功连接的地址（localStorage `onetwobubu_net_addr`），网页版仍按 location 派生；联机帮助文案更新为隧道/公网/APK 三种场景
 - **网络**：防火墙 8765 入站规则 `onetwobubu-game-8765`（已添加）；README 新增「安卓手机：安装与远程联机」章节（局域网/互联网两方式 + 安全提示 + 重打包流程）
+- **PWA**：`manifest.webmanifest`（standalone/主题色/一二合成图标 pwa-icon-192/512.png）+ `sw.js`（网络优先写穿缓存、离线回退、CACHE 版本号换桶）；index.html 接入 meta 并在非 Capacitor 环境注册 SW；server.js 补 `.webmanifest` MIME；eslint 加 sw.js 独立块与 android//www/ ignores；make_www 扩至 21 项，APK 同步重打（README 增「方式三 · PWA 添加到主屏」）
 
 ## 2026-09-19 · 系统性架构与代码优化（game.js 拆分）
 

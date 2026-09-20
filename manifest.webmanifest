@@ -1,0 +1,16 @@
+{
+  "name": "一二 & 布布 · 双人合作闯关",
+  "short_name": "一二布布",
+  "description": "治愈系情侣向 2D 横版解谜，双人协作闯关",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#141026",
+  "theme_color": "#ff6f9c",
+  "icons": [
+    { "src": "pwa-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "pwa-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "pwa-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

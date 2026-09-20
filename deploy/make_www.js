@@ -10,6 +10,7 @@ const FILES = [
   'levels.js', 'audio.js', 'ui.js', 'save.js', 'sprites.js',
   'mechanics.js', 'render.js', 'net.js', 'game.js',
   '一二.png', '布布.png', '一二侧面.png', '布布侧面.png',
+  'manifest.webmanifest', 'sw.js', 'pwa-icon-192.png', 'pwa-icon-512.png',
 ];
 const DIRS = ['img', 'bgm'];
 

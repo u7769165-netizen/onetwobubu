@@ -58,6 +58,13 @@
 2. 队友手机浏览器直接打开该链接游玩（联机地址自动填好）；APK 用户在「双人联机 → 服务器地址」填 `wss://xxxx.trycloudflare.com/ws`，连接成功后自动记住。
 3. APK 也可经隧道分发：把 `https://xxxx.trycloudflare.com/deploy/onetwobubu.apk` 发给队友下载安装。
 
+**方式三 · PWA 添加到主屏（免安装包，离线可玩）**
+
+1. 手机浏览器打开游戏的 **https** 地址（即方式二的隧道链接；`http://局域网IP` 不满足安全上下文，Chrome 不显示安装入口）。
+2. Chrome 菜单 →「安装应用 / 添加到主屏幕」→ 获得独立图标、全屏无地址栏运行。
+3. 首次联网加载后 `sw.js`（网络优先 + 写穿缓存）即支持离线启动单人游玩；进度存 localStorage 不丢。更新代码后重开自动拉新；如需整体换缓存改 `sw.js` 顶部 `CACHE` 版本号。
+4. 联机照常：https 页面自动用 wss；APK/离线壳内则手填服务器地址（见方式二）。
+
 **安全提示**：隧道 URL 为随机域名、关窗即失效，天然限定了访问范围；server.js 本身无鉴权，不要把 8765 端口直接映射到公网。
 
 **重新打包 APK**（改了游戏代码后）：`node deploy\make_www.js` → `npx cap sync android` → `cd android` → `gradlew.bat assembleDebug`，产物在 `android\app\build\outputs\apk\debug\app-debug.apk`（复制到 `deploy\onetwobubu.apk` 分发）。工程为 Capacitor 6 + Android SDK 34，需本机装好 JDK 17 与 `%LOCALAPPDATA%\Android\Sdk`。

@@ -20,6 +20,7 @@ const MIME = {
   '.m4a': 'audio/mp4',
   '.wav': 'audio/wav',
   '.mp3': 'audio/mpeg',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 const httpServer = http.createServer((req, res) => {

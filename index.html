@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <title>一二 &amp; 布布 · 双人闯关</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%95%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ff6f9c">
+<link rel="apple-touch-icon" href="pwa-icon-192.png">
   <link rel="stylesheet" href="style.css">
 <script>
 // 早期资源预载：与 CSS/JS 解析并行下载角色贴图，缩短首帧等待。
@@ -315,6 +318,14 @@
 <script src="render.js"></script>
 <script src="net.js"></script>
 <script src="game.js"></script>
+<script>
+// PWA：注册 Service Worker（APK 内 Capacitor 自带离线资源，跳过避免双层缓存）
+if (!window.Capacitor && 'serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+</script>
 </body>
 </html>
 

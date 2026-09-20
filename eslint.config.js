@@ -60,6 +60,17 @@ module.exports = [
     },
   },
   {
+    // PWA Service Worker：独立作用域，仅 SW 全局
+    files: ['sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { self: 'readonly', caches: 'readonly', clients: 'readonly', skipWaiting: 'readonly',
+                 fetch: 'readonly', URL: 'readonly', Response: 'readonly', Promise: 'readonly' },
+    },
+    rules: { 'no-undef': 'error', 'no-unused-vars': 'off' },
+  },
+  {
     // Node 侧脚本（生成器/注入器/测试）：用 node 全局，规则更宽松
     files: ['_gen_levels.js', '_inject_levels.js', '_extract_globals.js', 'server.js', 'tests/**/*.js'],
     languageOptions: {
@@ -73,5 +84,5 @@ module.exports = [
     },
     rules: { 'no-undef': 'error', 'no-unused-vars': 'off', 'no-empty': 'off' },
   },
-  { ignores: ['_legacy/', 'node_modules/', 'img/', 'tests/profile*', 'tests/pA', 'tests/pB', '_globals.json'] },
+  { ignores: ['_legacy/', 'node_modules/', 'img/', 'tests/profile*', 'tests/pA', 'tests/pB', '_globals.json', 'android/', 'www/', 'deploy/sdktmp/'] },
 ];
