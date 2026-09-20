@@ -8,7 +8,7 @@ const WWW = path.join(ROOT, 'www');
 const FILES = [
   'index.html', 'style.css',
   'levels.js', 'audio.js', 'ui.js', 'save.js', 'sprites.js',
-  'mechanics.js', 'render.js', 'net.js', 'game.js',
+  'mechanics.js', 'render.js', 'net.js', 'auth.js', 'game.js',
   '一二.png', '布布.png', '一二侧面.png', '布布侧面.png',
   'manifest.webmanifest', 'sw.js', 'pwa-icon-192.png', 'pwa-icon-512.png',
 ];

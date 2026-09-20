@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const auth = require('./server-auth');
 
 const ROOT = __dirname;
 const PORT = 8765;
@@ -25,6 +26,7 @@ const MIME = {
 
 const httpServer = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p.startsWith('/api/')) { auth.handleHTTP(req, res); return; }   // 账号/云存档 API
   if (p === '/' || p === '') p = '/index.html';
   const file = path.join(ROOT, p);
   if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end('forbidden'); }
@@ -110,7 +112,7 @@ httpServer.on('upgrade', (req, socket) => {
   const accept = crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
   socket.setNoDelay(true);
-  const conn = { socket, buf: Buffer.alloc(0), room: null, role: null, lastPong: Date.now(), dead: false };
+  const conn = { socket, buf: Buffer.alloc(0), room: null, role: null, lastPong: Date.now(), dead: false, uid: auth.uidFromReq(req) };
   conns.add(conn);
   socket.on('data', d => onData(conn, d));
   socket.on('close', () => onLeave(conn));
@@ -136,6 +138,15 @@ function onData(conn, data) {
 
 function handleMsg(conn, m) {
   if (!m || typeof m.t !== 'string') return;
+  if (m.t === 'auth') {   // APK 跨源场景：首条消息携带 Bearer 令牌（网页同源走 Cookie，无需此消息）
+    const v = auth.verifyToken(m.token);
+    if (v && !v.ticket) { conn.uid = v.uid; sendJSON(conn, { t: 'auth_ok' }); }
+    else sendJSON(conn, { t: 'auth_error', msg: '登录凭证无效或已过期' });
+    return;
+  }
+  if (m.t === 'create' || m.t === 'join') {
+    if (auth.ENFORCE && !conn.uid) { sendJSON(conn, { t: 'needauth' }); return; }
+  }
   if (m.t === 'create') {
     if (conn.room) return;
     const room = String(m.room || '').trim().toUpperCase();

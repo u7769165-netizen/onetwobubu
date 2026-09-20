@@ -19,6 +19,7 @@ const BROWSER_FILES = [
   'mechanics.js',
   'render.js',
   'net.js',
+  'auth.js',
   'game.js',
 ];
 

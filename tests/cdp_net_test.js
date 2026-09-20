@@ -76,6 +76,11 @@ async function boot(client, port) {
   try {
     await boot(A, 9331); await boot(B, 9332);
 
+    // 登录门禁：两页先确保有账号登录态（固定账号：能登录就登录，否则注册），Cookie 随 WS 升级携带
+    const ensureLogin = async (c, acct) => c.evalJs(`(async () => { const body = JSON.stringify({ name: '${acct}', pass: 'NetTest1234' }); const call = p => fetch(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body }).then(r => r.json()); let j = await call('/api/login').catch(() => ({})); if (!j.ok) j = await call('/api/register').catch(() => ({})); if (j.ok) authName = j.name; return j.ok ? 'ok' : JSON.stringify(j); })()`);
+    const la = await ensureLogin(A, 'netbotA'); check('A 账号登录就绪', la === 'ok', String(la));
+    const lb = await ensureLogin(B, 'netbotB'); check('B 账号登录就绪', lb === 'ok', String(lb));
+
     // 注入探针：主机统计 netSend 各类型；客机统计 netOnMsg 到达 + netApplySnapshot 调用/异常
     await A.evalJs(`(() => { const _s = netSend; window.__sent = {}; netSend = function(o){ window.__sent[o.t] = (window.__sent[o.t]||0)+1; return _s(o); }; return 'hp'; })()`);
     await B.evalJs(`(() => { const _o = netOnMsg; window.__got = {}; netOnMsg = function(m){ window.__got[m.t] = (window.__got[m.t]||0)+1; return _o(m); }; const _a = netApplySnapshot; window.__apply = 0; window.__applyErr = null; window.__reload = 0; netApplySnapshot = function(m){ window.__apply++; try { return _a(m); } catch(e){ window.__applyErr = String((e && e.stack) || e); throw e; } }; const _g = netGuestLoadLevel; netGuestLoadLevel = function(i,v,h){ window.__reload++; return _g(i,v,h); }; return 'gp'; })()`);

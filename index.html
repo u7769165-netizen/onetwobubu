@@ -57,6 +57,7 @@
       </div>
       <div class="progress-line" id="progressLine"></div>
       <div class="album-banner hidden" id="albumBanner"></div>
+      <button class="auth-chip" id="authChip">👤 登录账号</button>
     </div>
 
     <!-- 关卡选择界面 -->
@@ -104,6 +105,58 @@
         </details>
       </div>
       <button class="mbtn back" id="netBackBtn">返 回</button>
+    </div>
+
+    <!-- 账号界面（登录/注册/找回/账户） -->
+    <div id="authScreen" class="screen hidden">
+      <div class="screen-title">账号中心</div>
+      <div class="au-tabs">
+        <button class="mbtn au-tab primary" id="auTLogin">登 录</button>
+        <button class="mbtn au-tab" id="auTReg">注 册</button>
+        <button class="mbtn au-tab" id="auTRec">找回密码</button>
+        <button class="mbtn au-tab" id="auTAcct">我的账户</button>
+      </div>
+      <div class="net-form au-panel" id="auPLogin">
+        <label>用户名 <input id="auName" type="text" spellcheck="false" maxlength="20"></label>
+        <label>密码 <input id="auPass" type="password" maxlength="64"></label>
+        <button class="mbtn primary wide" id="auLoginBtn">登 录</button>
+        <div class="screen-tip">双人联机需登录；单人模式游客可直接游玩</div>
+      </div>
+      <div class="net-form au-panel hidden" id="auPReg">
+        <label>用户名 <input id="rgName" type="text" spellcheck="false" maxlength="20"></label>
+        <label>密码（至少 8 位） <input id="rgPass" type="password" maxlength="64"></label>
+        <label>确认密码 <input id="rgPass2" type="password" maxlength="64"></label>
+        <label>安全问题（可选） <input id="rgQ" type="text" maxlength="40" placeholder="如：我们的纪念日是哪天？"></label>
+        <label>安全问题答案（可选） <input id="rgA" type="text" maxlength="40"></label>
+        <button class="mbtn primary wide" id="auRegBtn">注册并登录</button>
+        <div class="screen-tip">注册成功会显示 10 组恢复码，请务必截图保存，忘记密码时使用</div>
+      </div>
+      <div class="net-form au-panel hidden" id="auPRec">
+        <label>用户名 <input id="rcName" type="text" spellcheck="false" maxlength="20"></label>
+        <div class="net-row"><input id="rcCode" type="text" maxlength="10" placeholder="恢复码 XXXX-XXXX"><button class="mbtn primary" id="auRecCodeBtn">用恢复码</button></div>
+        <label>或回答安全问题 <input id="rcAns" type="text" maxlength="40"></label>
+        <button class="mbtn" id="auRecQBtn">用安全问题</button>
+      </div>
+      <div class="net-form au-panel hidden" id="auPReset">
+        <label>新密码（至少 8 位） <input id="rsPass" type="password" maxlength="64"></label>
+        <label>确认新密码 <input id="rsPass2" type="password" maxlength="64"></label>
+        <button class="mbtn primary wide" id="auResetBtn">重置密码</button>
+      </div>
+      <div class="net-form au-panel hidden" id="auPCode">
+        <div class="screen-title" style="font-size:20px">📋 你的恢复码（仅此一次显示）</div>
+        <div class="au-codes" id="auCodesList"></div>
+        <div class="screen-tip">忘记密码时任一恢复码可重置。请立即截图或抄写保存！</div>
+        <button class="mbtn primary wide" id="auCodesOkBtn">我已妥善保存</button>
+      </div>
+      <div class="net-form au-panel hidden" id="auPAcct">
+        <div class="au-who">当前登录：<b id="auWhoName">游客</b></div>
+        <label>修改密码 · 原密码 <input id="cpOld" type="password" maxlength="64"></label>
+        <label>新密码 <input id="cpNew" type="password" maxlength="64"></label>
+        <button class="mbtn" id="auChangeBtn">修改密码（全端登出）</button>
+        <button class="mbtn wide" id="auLogoutBtn">退出登录</button>
+      </div>
+      <div class="au-err hidden" id="auErr"></div>
+      <button class="mbtn back" id="authBackBtn">返 回</button>
     </div>
 
     <!-- 选层界面（多层级关卡） -->
@@ -317,6 +370,7 @@
 <script src="mechanics.js"></script>
 <script src="render.js"></script>
 <script src="net.js"></script>
+<script src="auth.js"></script>
 <script src="game.js"></script>
 <script>
 // PWA：注册 Service Worker（APK 内 Capacitor 自带离线资源，跳过避免双层缓存）

@@ -42,6 +42,8 @@ function netConnect(action, room) {
     net.connected = true; net.retryT = 1000;
     clearTimeout(net.reconnectTimer);
     try { localStorage.setItem('onetwobubu_net_addr', url); } catch (e) {}
+    const _at = authWsToken();   // APK 跨源无 Cookie：首条消息携带 Bearer 令牌（网页同源走 Cookie，返回空跳过）
+    if (_at) netSend({ t: 'auth', token: _at });
     netSend(net.want.action === 'create' ? { t: 'create', room } : { t: 'join', room });
   };
   net.ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } netOnMsg(m); };
@@ -61,6 +63,9 @@ function onNetClose() {
 
 function netOnMsg(m) {
   switch (m.t) {
+    case 'auth_ok': return;
+    case 'needauth': authOnNeedAuth(); return;
+    case 'auth_error': authOnNeedAuth(m.msg); return;
     case 'welcome':
       net.role = m.role; net.room = m.room;
       net.idx = net.want.char;

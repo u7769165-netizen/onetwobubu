@@ -354,3 +354,14 @@
   /* 按键层显示时：画面按视口高度扣掉按键带再限宽，底部留白防 .ctrls 被遮 */
   body.touch { --tp-h: calc(112px + env(safe-area-inset-bottom)); padding-bottom: var(--tp-h); }
   body.touch #wrap { width: min(96vw, 1080px, calc((100vh - 96px - var(--tp-h)) * 1.6)); }
+
+/* ===== 账号系统（auth.js / authScreen） ===== */
+.auth-chip{position:absolute;top:calc(10px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:5;background:rgba(20,16,38,.55);color:#ffd9e8;border:1px solid rgba(255,143,179,.4);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)}
+.auth-chip.logged{border-color:#7dffa8;color:#c9ffd9}
+.au-tabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0 2px}
+.au-tab{padding:8px 14px;font-size:14px}
+.au-panel{max-height:46vh;overflow-y:auto}
+.au-codes{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}
+.au-code{font-family:Consolas,monospace;background:rgba(255,143,179,.12);border:1px dashed rgba(255,143,179,.5);color:#ffe3ee;border-radius:6px;padding:6px 8px;text-align:center;font-size:14px;letter-spacing:1px}
+.au-err{margin:8px auto 0;max-width:520px;color:#ff9b9b;background:rgba(120,20,30,.28);border:1px solid rgba(255,120,120,.35);border-radius:8px;padding:7px 12px;font-size:13px;text-align:center}
+.au-who{color:#ffe3ee;font-size:15px;text-align:center;margin-bottom:4px}

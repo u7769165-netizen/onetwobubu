@@ -652,7 +652,7 @@ const netAddrEl = document.getElementById('netAddr');
   try { saved = localStorage.getItem('onetwobubu_net_addr') || ''; } catch (e) {}
   netAddrEl.value = (local && saved) ? saved : def;
 })();
-document.getElementById('netBtn').addEventListener('click', () => showScreen('net'));
+document.getElementById('netBtn').addEventListener('click', () => authEnsureNet());
 document.getElementById('netBackBtn').addEventListener('click', () => { if (net.mode === 'online') netLeave(); showScreen('title'); });
 document.getElementById('netCreateBtn').addEventListener('click', () => {
   if (net.connected) { netStatus('已在房间中'); return; }

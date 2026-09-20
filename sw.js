@@ -1,10 +1,10 @@
 // PWA Service Worker：网络优先 + 写穿缓存（离线时回退缓存），支撑「添加到主屏」离线游玩。
 // 版本升级只改 CACHE 名即可整体换新（activate 时清旧桶）。
-const CACHE = 'owb-pwa-v1';
+const CACHE = 'owb-pwa-v2';
 const CORE = [
   './', './index.html', './style.css', './manifest.webmanifest',
   './levels.js', './audio.js', './ui.js', './save.js', './sprites.js',
-  './mechanics.js', './render.js', './net.js', './game.js',
+  './mechanics.js', './render.js', './net.js', './auth.js', './game.js',
   './一二.png', './布布.png', './一二侧面.png', './布布侧面.png',
   './pwa-icon-192.png', './pwa-icon-512.png',
 ];

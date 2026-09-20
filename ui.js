@@ -205,6 +205,7 @@ function showScreen(name) {
   levelScreen.classList.toggle('hidden', name !== 'levels');
   settingsScreen.classList.toggle('hidden', name !== 'settings');
   netScreen.classList.toggle('hidden', name !== 'net');
+  document.getElementById('authScreen').classList.toggle('hidden', name !== 'auth');
   document.getElementById('subPick').classList.toggle('hidden', name !== 'subpick');
   document.getElementById('mapScreen').classList.toggle('hidden', name !== 'map');
   document.getElementById('helpScreen').classList.toggle('hidden', name !== 'help');

@@ -2,6 +2,16 @@
 
 轻量记录每轮主要改动（倒序）。完整设计决策见代码注释与 `README.md`。
 
+## 2026-09-20 · 账号系统与云存档（联机登录门禁）
+
+- **服务端账号内核** `server-auth.js`（零依赖：node:sqlite + node:crypto）：users/recover/saves 三表；scrypt 加盐口令哈希；无状态 HMAC 令牌（`uid.exp.tokenver.签名`，7 天）+ token_ver 递增全端吊销；注册/登录/找回（恢复码 + 安全问题双通道，10 分钟一次性票据）/改密/登出/`/api/save` GET·PUT（rev 乐观锁，409 返回云端版）；IP 限流（注册 3/时、登录 10/分）+ 账号连错 5 次锁 15 分钟；`AUTH_ENFORCE=0` 回退开关、`AUTH_RATE_LIMIT=0` 测试豁免
+- **server.js 接线**：`/api/*` 路由交内核；WS upgrade 解析 Cookie/Bearer 绑 `conn.uid`；`create/join` 未登录回 `needauth`；新增入站 `auth` 消息（APK 跨源 Bearer）与出站 `auth_ok/auth_error`
+- **客户端** `auth.js`（新）+ index.html `#authScreen` 六面板（登录/注册/找回/重置/恢复码/账号管理）+ style.css 样式：游客点「双人联机」弹登录、登录后回跳大厅；主界面右上账号 chip；重置成功即展示换新恢复码；`net.js` 连接建立自动附带 auth 消息、收到 `needauth` 断线弹回登录并提示
+- **云存档**：登录（含刷新 Cookie 恢复）即 GET 合并（进度只进不退：解锁/星级/best/好感/合照取大）；包装 `persistSave` 防抖 2s PUT；409 冲突合并重试；APK 令牌存 localStorage
+- **测试**：新增 `tests/auth_api.js`（18 断言：注册/me/弱密码/重名/401/rev 0→1/409/恢复码一次性/ticket 重置/旧令牌吊销/WS needauth/Cookie 通道/双端握手）与 `tests/cdp_auth.js`（9 断言 UI 级：游客门禁、UI 注册恢复码面板、刷新 Cookie 恢复、登录建房、needauth 弹回、游客单人回归×2）；`cdp_net_test.js` 两页注入登录态适配门禁；`run_all.js` 纳入 auth_api；守护链（globals→lint→全量回归）全绿
+- **PWA/部署同步**：sw.js CACHE→v2 且 auth.js 入 CORE；deploy/make_www.js 拷贝清单加 auth.js；`.gitignore` 加 `data/`、`tests/pAu*/`；新增 `tests/_restart_server.ps1` 测试服务器重启脚本
+- **文档**：README 新增「账号与云存档」章节（含负载均衡就绪说明：无状态令牌 + 共享 data/ 或集中 DB）；安装指引补登录/注册/恢复码步骤与忘记密码 FAQ
+
 ## 2026-09-20 · 安卓部署与互联网联机
 
 - **APK 打包**：引入 Capacitor 6（部署层，不改游戏代码结构）——`capacitor.config.json`（appId com.onetwobubu.game，allowMixedContent 兼容 ws/wss）、`deploy\make_www.js`（拷贝 17 项静态资源到 www/）、`android/` 工程（Gradle 8.2.1 腾讯镜像 + 阿里云 Maven 镜像）；debug 签名 APK 约 17MB，经 `http://<IP>:8765/deploy/onetwobubu.apk` 直接分发安装

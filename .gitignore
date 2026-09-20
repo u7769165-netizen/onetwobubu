@@ -2,6 +2,7 @@ node_modules/
 tests/profile*/
 tests/pA/
 tests/pB/
+tests/pAu*/
 %USERP~1/
 _legacy/backup_*/
 www/
@@ -12,4 +13,5 @@ deploy/onetwobubu.apk
 android/.gradle/
 android/build/
 android/app/build/
+data/
 
