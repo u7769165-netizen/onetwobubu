@@ -45,6 +45,27 @@ function authErr(msg) {
   e.textContent = msg || '';
   e.classList.toggle('hidden', !msg);
 }
+/* P1-5 轻量 toast：固定底部提示，3.2s 自动收起（云存档合并等场景） */
+function authToast(msg) {
+  let t = document.getElementById('authToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'authToast';
+    t.className = 'auth-toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(authToast._h);
+  authToast._h = setTimeout(() => t.classList.remove('show'), 3200);
+}
+/* P1-5 按钮加载态：禁用 + 转圈（currentColor 描边，适配各按钮配色） */
+function authBtnLoading(id, on) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  b.disabled = on;
+  b.classList.toggle('loading', on);
+}
 function authApplyLogin(j) {
   authName = j.name;
   if (AUTH_APK && j.token) { authToken = j.token; try { localStorage.setItem('onetwobubu_token', j.token); } catch (e) {} }
@@ -80,6 +101,14 @@ function authOnNeedAuth(msg) {   // WS 中继拒绝未登录建房/加入
 }
 
 /* ---------- 云存档：合并 + 防抖上传（进度只进不退） ---------- */
+/**
+ * 合并本地与云端存档（字段级取"更优"值，进度只进不退）。
+ * 规则：unlocked/bonusStars/love 与各类 best/stars/heartLv/loveTiers 取 max；
+ * subs/photos 取并集；settings 以本地为准；album 以云端为准。
+ * @param {object} local  本地存档对象
+ * @param {object} cloud  云端存档对象（null/非法时直接返回 local）
+ * @returns {object} 合并后的新存档对象（不修改入参）
+ */
 function authMergeSave(local, cloud) {
   if (!cloud || typeof cloud !== 'object') return local;
   const out = JSON.parse(JSON.stringify(cloud));
@@ -131,6 +160,7 @@ function authUpload() {
       persistSave();
       authRev = j.rev;
       authQueueUpload();
+      authToast('☁️ 检测到其他设备进度，已自动合并');   // P1-5：409 冲突合并对用户透明化
     }
   }).catch(() => { authBusy = false; });
 }
@@ -145,9 +175,9 @@ function authUpload() {
   $('auLoginBtn').addEventListener('click', () => {
     const name = $('auName').value.trim(), pass = $('auPass').value;
     if (!name || !pass) return authErr('请输入用户名和密码');
-    $('auLoginBtn').disabled = true;
+    authBtnLoading('auLoginBtn', true);
     authApi('/api/login', 'POST', { name, pass }).then(({ j }) => {
-      $('auLoginBtn').disabled = false;
+      authBtnLoading('auLoginBtn', false);
       if (!j.ok) return authErr(j.msg);
       authApplyLogin(j);
       if (authAfter === 'net') showScreen('net'); else showScreen('title');
@@ -156,9 +186,9 @@ function authUpload() {
   $('auRegBtn').addEventListener('click', () => {
     const name = $('rgName').value.trim(), pass = $('rgPass').value;
     if (pass !== $('rgPass2').value) return authErr('两次输入的密码不一致');
-    $('auRegBtn').disabled = true;
+    authBtnLoading('auRegBtn', true);
     authApi('/api/register', 'POST', { name, pass, sec_q: $('rgQ').value.trim() || null, sec_a: $('rgA').value.trim() || null }).then(({ j }) => {
-      $('auRegBtn').disabled = false;
+      authBtnLoading('auRegBtn', false);
       if (!j.ok) return authErr(j.msg);
       const box = $('auCodesList');
       box.innerHTML = '';
@@ -187,7 +217,9 @@ function authUpload() {
   $('auResetBtn').addEventListener('click', () => {
     const p1 = $('rsPass').value;
     if (p1 !== $('rsPass2').value) return authErr('两次输入的密码不一致');
+    authBtnLoading('auResetBtn', true);
     authApi('/api/reset', 'POST', { ticket: authTicket, new_pass: p1 }).then(({ j }) => {
+      authBtnLoading('auResetBtn', false);
       if (!j.ok) return authErr(j.msg);
       authTicket = '';
       $('auPReset').classList.add('hidden');
@@ -209,6 +241,21 @@ function authUpload() {
   });
   const chip = $('authChip');
   if (chip) chip.addEventListener('click', () => authOpen(authName ? 'acct' : 'login', 'title'));
+
+  /* P1-5 注册密码强度条：长度不足 8 位一律弱；≥8 位按字符种类数与长度分级 */
+  $('rgPass').addEventListener('input', () => {
+    const v = $('rgPass').value, meter = $('rgMeter');
+    if (!v) { meter.classList.add('hidden'); return; }
+    meter.classList.remove('hidden');
+    let kinds = 0;
+    if (/[a-z]/.test(v)) kinds++;
+    if (/[A-Z]/.test(v)) kinds++;
+    if (/\d/.test(v)) kinds++;
+    if (/[^a-zA-Z0-9]/.test(v)) kinds++;
+    const lvl = v.length < 8 ? 1 : (kinds <= 1 ? 1 : (kinds === 2 || v.length < 12 ? 2 : 3));
+    meter.dataset.lvl = lvl;
+    $('rgMeterTxt').textContent = ['弱', '中', '强'][lvl - 1];
+  });
 })();
 
 /* ---------- 启动：恢复登录态（Cookie 或 APK 本地令牌） ---------- */

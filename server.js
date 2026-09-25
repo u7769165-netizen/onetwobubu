@@ -29,21 +29,21 @@ const httpServer = http.createServer((req, res) => {
   if (p.startsWith('/api/')) { auth.handleHTTP(req, res); return; }   // 账号/云存档 API
   if (p === '/' || p === '') p = '/index.html';
   const file = path.join(ROOT, p);
-  if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end('forbidden'); }
+  if (!file.startsWith(ROOT)) { res.writeHead(403, auth.SEC_HEADERS); return res.end('forbidden'); }
   fs.stat(file, (err, st) => {
-    if (err || !st.isFile()) { res.writeHead(404); return res.end('not found'); }
+    if (err || !st.isFile()) { res.writeHead(404, auth.SEC_HEADERS); return res.end('not found'); }
     const ext = path.extname(file).toLowerCase();
     // ETag = 大小+mtime（弱校验即可）；命中 If-None-Match 直接 304，零字节传输
     const etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"';
     const LONG_CACHE = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.m4a', '.wav', '.mp3'];
-    const headers = {
+    const headers = Object.assign({}, auth.SEC_HEADERS, {  // P1-4 安全增强：CSP/nosniff/X-Frame-Options/Referrer-Policy
       'Content-Type': MIME[ext] || 'application/octet-stream',
       ETag: etag,
       'Content-Length': st.size,  // P0-1 性能优化：提前告知客户端文件大小
       // 代码类（html/js/css）no-cache 每次重验证（开发期改动即时生效）；图片/音频长缓存（文件更新 mtime 变 → ETag 变，安全）
       'Cache-Control': LONG_CACHE.includes(ext)
         ? 'public, max-age=86400, must-revalidate' : 'no-cache',
-    };
+    });
     if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
     // P0-1 性能优化：流式传输替代 fs.readFile，减少内存占用
     const stream = fs.createReadStream(file);
@@ -141,6 +141,13 @@ function onData(conn, data) {
   }
 }
 
+/**
+ * WebSocket 消息分发：auth（APK 跨源 Bearer 凭证）/ create（建房）/ join（入房）由中继处理，
+ * 其余游戏消息（state/input/lv/rs/pa/pong…）原样透传给房间同伴。
+ * AUTH_ENFORCE 开启时，create/join 要求已登录（uid 来自 Cookie 握手解析或 auth 消息）。
+ * @param {object} conn 连接对象 {socket, buf, room, role, lastPong, dead, uid}
+ * @param {object} m    已解析的 JSON 消息，必须含 t 类型字段
+ */
 function handleMsg(conn, m) {
   if (!m || typeof m.t !== 'string') return;
   if (m.t === 'auth') {   // APK 跨源场景：首条消息携带 Bearer 令牌（网页同源走 Cookie，无需此消息）

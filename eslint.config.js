@@ -37,7 +37,7 @@ try {
 
 module.exports = [
   {
-    files: ['levels.js', 'audio.js', 'ui.js', 'save.js', 'sprites.js', 'mechanics.js', 'render.js', 'net.js', 'auth.js', 'game.js'],
+    files: ['preload.js', 'levels.js', 'audio.js', 'ui.js', 'save.js', 'sprites.js', 'mechanics.js', 'render.js', 'net.js', 'auth.js', 'game.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'script',
@@ -72,7 +72,7 @@ module.exports = [
   },
   {
     // Node 侧脚本（生成器/注入器/测试）：用 node 全局，规则更宽松
-    files: ['_gen_levels.js', '_inject_levels.js', '_extract_globals.js', 'server.js', 'server-auth.js', 'tests/**/*.js'],
+    files: ['_gen_levels.js', '_inject_levels.js', '_extract_globals.js', 'server.js', 'server-auth.js', 'rate-limit.js', 'tests/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'commonjs',

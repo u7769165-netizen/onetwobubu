@@ -64,7 +64,12 @@ function invalidateTokenVerCache(uid) {
   tokenVerCache.delete(uid);
 }
 
-// 返回 {uid, ver} 或 null（t0='U' 普通令牌；'R' 找回票据）
+/**
+ * 校验并解析无状态令牌（格式 uid.exp.tokenver.HMAC-SHA256签名）。
+ * 普通令牌额外核对 users.token_ver（带 60s 内存缓存）确认未被吊销；找回票据（tokenver='R'）不查库。
+ * @param {string} token 原始令牌串（来自 Cookie 或 Bearer 头）
+ * @returns {{uid:number, ver:number}|{uid:number, ticket:true}|null} 通过返回身份对象，无效/过期/被吊销返回 null
+ */
 function verifyToken(token) {
   if (typeof token !== 'string') return null;
   const parts = token.split('.');
@@ -95,21 +100,30 @@ function genCodes() {
   return out;
 }
 
-/* ---------- 限流（内存，重启清零可接受） ---------- */
-const RL_ON = process.env.AUTH_RATE_LIMIT !== '0';   // 0=关闭 IP 限流窗口（仅测试环境用，账号锁定逻辑不受影响）
-const rl = new Map(); // key -> [ts...]
-function rateOk(key, max, windowMs) {
-  if (!RL_ON) return true;
-  const now = Date.now();
-  const arr = (rl.get(key) || []).filter(t => now - t < windowMs);
-  if (arr.length >= max) { rl.set(key, arr); return false; }
-  arr.push(now); rl.set(key, arr); return true;
-}
+/* ---------- 限流（P1-6 抽至独立模块 rate-limit.js） ---------- */
+const { rateOk } = require('./rate-limit');
+
+/* ---------- P1-4 安全响应头（静态与 API 共用，server.js 也引用） ----------
+   CSP 定稿依据：
+   - script-src 'self'：index.html 两处内联脚本已外置（preload.js / game.js 尾部），无 eval/内联事件
+   - style-src 'unsafe-inline'：index.html 大量 style="..." 属性，样式注入风险低，保留
+   - img-src data:：favicon 用 data:image/svg+xml
+   - connect-src ws: wss:：联机大厅允许用户手填任意 ws:// 地址
+   - frame-ancestors 'self'：兼容同源 iframe 页面（不用 DENY） */
+const SEC_HEADERS = {
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+    "media-src 'self'; connect-src 'self' ws: wss:; worker-src 'self'; frame-ancestors 'self'; " +
+    "base-uri 'self'; object-src 'none'; form-action 'self'",
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'same-origin',
+};
 
 /* ---------- HTTP 工具 ---------- */
 function json(res, code, obj, headers) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) }, headers || {}));
+  res.writeHead(code, Object.assign({}, SEC_HEADERS, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) }, headers || {}));
   res.end(body);
 }
 function readBody(req) {
@@ -156,7 +170,7 @@ function cookieOkName(name) { return typeof name === 'string' && /^[\w\u4e00-\u9
 async function handleHTTP(req, res) {
   const p = req.url.split('?')[0];
   const cors = corsHeaders(req);
-  if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
+  if (req.method === 'OPTIONS') { res.writeHead(204, Object.assign({}, SEC_HEADERS, cors)); return res.end(); }
   if (!p.startsWith('/api/')) return false;   // 非 API 交回静态服务
   const ip = (req.socket.remoteAddress || '?').replace(/^::f{4}:/, '');
   const me = uidFromReq(req);
@@ -281,4 +295,4 @@ async function handleHTTP(req, res) {
   }
 }
 
-module.exports = { handleHTTP, verifyToken, uidFromReq, ENFORCE, COOKIE };
+module.exports = { handleHTTP, verifyToken, uidFromReq, ENFORCE, COOKIE, SEC_HEADERS };

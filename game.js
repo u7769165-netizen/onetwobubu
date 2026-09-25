@@ -685,3 +685,11 @@ setInterval(() => {
 /* URL 参数快速入口：?net=1 直接进大厅 */
 if (new URLSearchParams(location.search).has('net')) showScreen('net');
 requestAnimationFrame(loop);
+
+/* PWA：注册 Service Worker（APK 内 Capacitor 自带离线资源，跳过避免双层缓存）
+   原为 index.html 内联脚本，P1-4 外置以启用严格 CSP script-src 'self' */
+if (!window.Capacitor && 'serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}

@@ -365,3 +365,19 @@
 .au-code{font-family:Consolas,monospace;background:rgba(255,143,179,.12);border:1px dashed rgba(255,143,179,.5);color:#ffe3ee;border-radius:6px;padding:6px 8px;text-align:center;font-size:14px;letter-spacing:1px}
 .au-err{margin:8px auto 0;max-width:520px;color:#ff9b9b;background:rgba(120,20,30,.28);border:1px solid rgba(255,120,120,.35);border-radius:8px;padding:7px 12px;font-size:13px;text-align:center}
 .au-who{color:#ffe3ee;font-size:15px;text-align:center;margin-bottom:4px}
+
+/* ===== P1-5 UX：按钮加载态 / 密码强度条 / 云存档 toast ===== */
+.mbtn.loading{pointer-events:none;opacity:.85}
+.mbtn.loading::after{content:'';display:inline-block;width:12px;height:12px;margin-left:8px;vertical-align:-2px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:owb-spin .7s linear infinite}
+@keyframes owb-spin{to{transform:rotate(360deg)}}
+.pw-meter{display:flex;align-items:center;gap:6px;max-width:520px;margin:2px auto 0}
+.pw-meter i{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.14);transition:background .2s}
+.pw-meter b{font-size:12px;font-weight:600;min-width:2.2em;text-align:left;color:#ffd9e8}
+.pw-meter[data-lvl="1"] i:nth-child(1){background:#f07f6e}
+.pw-meter[data-lvl="1"] b{color:#ff9b9b}
+.pw-meter[data-lvl="2"] i:nth-child(-n+2){background:#ffd166}
+.pw-meter[data-lvl="2"] b{color:#ffd166}
+.pw-meter[data-lvl="3"] i:nth-child(-n+3){background:#5cc98a}
+.pw-meter[data-lvl="3"] b{color:#8fe3b0}
+.auth-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(12px);background:rgba(40,20,30,.92);border:1px solid rgba(255,143,179,.5);color:#ffe3ee;border-radius:10px;padding:9px 16px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:9999;max-width:86vw;text-align:center}
+.auth-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}

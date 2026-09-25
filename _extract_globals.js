@@ -11,6 +11,7 @@ const espree = require('espree');
 
 // 浏览器侧共享全局作用域的脚本（按 index.html 加载顺序维护）
 const BROWSER_FILES = [
+  'preload.js',
   'levels.js',
   'audio.js',
   'ui.js',
