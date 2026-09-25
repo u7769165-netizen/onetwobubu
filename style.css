@@ -358,13 +358,63 @@
 /* ===== 账号系统（auth.js / authScreen） ===== */
 .auth-chip{position:absolute;top:calc(10px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:5;background:rgba(20,16,38,.55);color:#ffd9e8;border:1px solid rgba(255,143,179,.4);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)}
 .auth-chip.logged{border-color:#7dffa8;color:#c9ffd9}
-.au-tabs{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0 2px}
-.au-tab{padding:8px 14px;font-size:14px}
-.au-panel{max-height:46vh;overflow-y:auto}
+/* 修复：hidden 类此前无对应规则，面板/错误条/强度条实际从未被隐藏 */
+.au-panel.hidden,.au-err.hidden,.pw-meter.hidden{display:none}
+/* 页签栏：分段控件式导航，当前页签突出、其余弱化 */
+.au-tabs{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin:6px 0 4px;padding:4px;border-radius:999px;background:rgba(15,10,24,.45);border:1px solid rgba(255,255,255,.12)}
+.au-tab{min-width:0;padding:7px 16px;font-size:14px;letter-spacing:2px;border-radius:999px;background:transparent;color:rgba(255,255,255,.72);box-shadow:none}
+.au-tab:hover{transform:none;filter:none;background:rgba(255,255,255,.1);color:#fff}
+.au-tab:active{transform:none}
+.au-tab.primary{background:linear-gradient(180deg,#9fe8b4,#5cc98a);color:#235c38;box-shadow:0 3px 10px rgba(0,0,0,.35),inset 0 -2px 0 rgba(40,120,70,.35)}
+/* 面板：卡片容器承载核心操作区 */
+.au-panel{width:min(440px,88vw);max-height:52vh;overflow-y:auto;gap:11px;padding:16px 18px;border-radius:16px;background:rgba(15,10,24,.5);border:1px solid rgba(255,255,255,.14);box-shadow:0 12px 32px rgba(0,0,0,.4)}
+/* 表单核心区突出：标签在上、输入框整行加高，聚焦态醒目 */
+#authScreen .net-form label{flex-direction:column;align-items:stretch;gap:5px;font-size:13px;letter-spacing:1px;color:rgba(255,255,255,.85)}
+#authScreen .net-form label>input{flex:0 0 auto;width:100%}
+#authScreen .net-form input[type=text],#authScreen .net-form input[type=password]{min-height:44px;padding:10px 12px;font-size:15px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:rgba(8,6,16,.55);color:#fff;transition:border-color .15s,box-shadow .15s}
+#authScreen .net-form input:focus{outline:none;border-color:#ff9ec6;box-shadow:0 0 0 3px rgba(255,143,179,.28)}
+#authScreen .net-form input:-webkit-autofill{box-shadow:0 0 0 1000px #2a2036 inset;-webkit-text-fill-color:#fff}
+/* 主操作按钮加大突出 */
+#authScreen .au-panel .mbtn.primary.wide{padding:12px 20px;font-size:16px;letter-spacing:5px;margin-top:2px}
+/* 辅助信息弱化但保持可读 */
+#authScreen .au-panel .screen-tip{font-size:11px;opacity:.55;margin:0;letter-spacing:.5px;line-height:1.7}
+#authScreen .pw-meter{margin:0}
+/* 可选安全题：折叠收纳，summary 常显说明用途 */
+.au-opt{font-size:13px}
+.au-opt summary{cursor:pointer;opacity:.6;letter-spacing:1px;padding:2px 0}
+.au-opt summary:hover,.au-opt[open] summary{opacity:.9}
+.au-opt-body{display:flex;flex-direction:column;gap:10px;margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.18)}
+/* 键盘可达性：焦点环 */
+.au-tab:focus-visible,#authScreen .mbtn:focus-visible{outline:2px solid #ffd9e8;outline-offset:2px}
 .au-codes{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}
 .au-code{font-family:Consolas,monospace;background:rgba(255,143,179,.12);border:1px dashed rgba(255,143,179,.5);color:#ffe3ee;border-radius:6px;padding:6px 8px;text-align:center;font-size:14px;letter-spacing:1px}
-.au-err{margin:8px auto 0;max-width:520px;color:#ff9b9b;background:rgba(120,20,30,.28);border:1px solid rgba(255,120,120,.35);border-radius:8px;padding:7px 12px;font-size:13px;text-align:center}
+.au-err{width:min(440px,88vw);margin:10px auto 0;color:#ff9b9b;background:rgba(120,20,30,.28);border:1px solid rgba(255,120,120,.35);border-radius:10px;padding:8px 12px;font-size:13px;text-align:center}
 .au-who{color:#ffe3ee;font-size:15px;text-align:center;margin-bottom:4px}
+/* 面板滚动条细化，避免抢占视觉 */
+.au-panel::-webkit-scrollbar{width:6px}
+.au-panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:3px}
+/* 响应式：窄屏页签等分、面板贴边；矮屏回退紧凑横排保证主按钮不被挤出；触屏保底大目标 */
+@media (max-width:560px){
+  .au-tabs{width:min(92vw,440px);border-radius:16px}
+  .au-tab{flex:1;padding:9px 4px;font-size:13px;letter-spacing:1px;text-align:center}
+  .au-panel{padding:14px 12px}
+}
+@media (max-height:640px){
+  #authScreen .screen-title{font-size:20px;margin-bottom:2px}
+  .au-tabs{margin:2px 0}
+  .au-tab{padding:6px 12px;font-size:13px}
+  .au-panel{max-height:52vh;gap:7px;padding:10px 14px}
+  /* 矮视口回退：标签与输入框同行，整体高度减半 */
+  #authScreen .net-form label{flex-direction:row;align-items:center;gap:8px;font-size:12px}
+  #authScreen .net-form label>input{flex:1;width:auto}
+  #authScreen .net-form input[type=text],#authScreen .net-form input[type=password]{min-height:36px;padding:6px 10px;font-size:14px}
+  #authScreen .au-panel .mbtn.primary.wide{padding:8px 16px;font-size:15px;letter-spacing:3px;margin-top:0}
+  #authScreen .au-panel .screen-tip{font-size:10px}
+  #authScreen .mbtn.back{margin-top:6px}
+}
+@media (pointer:coarse) and (min-height:641px){
+  .au-tab{min-height:40px}
+}
 
 /* ===== P1-5 UX：按钮加载态 / 密码强度条 / 云存档 toast ===== */
 .mbtn.loading{pointer-events:none;opacity:.85}
