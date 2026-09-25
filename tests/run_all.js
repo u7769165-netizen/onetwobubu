@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 const scripts = fs.readdirSync(__dirname)
-  .filter(f => (f.startsWith('cdp_') || f === 'auth_api.js') && f.endsWith('.js'))
+  .filter(f => (f.startsWith('cdp_') || f.startsWith('unit_') || f === 'auth_api.js') && f.endsWith('.js'))
   .filter(f => !process.argv[2] || f.includes(process.argv[2]))
   .sort();
 

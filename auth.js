@@ -104,7 +104,7 @@ function authOnNeedAuth(msg) {   // WS 中继拒绝未登录建房/加入
 /**
  * 合并本地与云端存档（字段级取"更优"值，进度只进不退）。
  * 规则：unlocked/bonusStars/love 与各类 best/stars/heartLv/loveTiers 取 max；
- * subs/photos 取并集；settings 以本地为准；album 以云端为准。
+ * subs/photos 取并集（同键云端优先）；settings/album 以云端为准。
  * @param {object} local  本地存档对象
  * @param {object} cloud  云端存档对象（null/非法时直接返回 local）
  * @returns {object} 合并后的新存档对象（不修改入参）

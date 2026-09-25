@@ -80,9 +80,10 @@ function musicNote(freq, t, dur, type, vol) {
    'classic'=「原版经典旋律」（bgm0 单曲循环）。轨间 BGM_FADE 秒交叉渐变；解码失败全部回退程序化音乐。 */
 const BGM_FILES = ['bgm/bgm0.wav', 'bgm/bgm1.m4a', 'bgm/bgm2.m4a', 'bgm/bgm3.m4a', 'bgm/bgm4.m4a', 'bgm/bgm5.m4a', 'bgm/bgm6.m4a', 'bgm/bgm7.m4a'];
 const BGM_FADE = 2.5;          // 交叉渐变时长（秒）
-let bgmBuffers = null;         // 解码完成的 AudioBuffer 数组（null=未开始/解码中）
-let bgmDecodeFailed = false;   // 全部解码失败 → 程序化回退
-let bgmDecoding = false;
+let bgmBuffers = null;         // 解码完成的 AudioBuffer 数组（null=尚无成功轨）
+let bgmDecodeFailed = false;   // 已尝试的池全部解码失败 → 程序化回退
+let bgmLoading = false;        // 一批加载任务进行中
+let bgmSlots = new Array(BGM_FILES.length).fill(undefined);  // undefined=未加载 null=失败 AudioBuffer=就绪（P2-A 按模式池增量加载）
 let bgmIdx = 0;                // 当前轨在 bgmBuffers 内的位置（起播时由 bgmPool 对齐到列表第一首，无随机）
 let bgmTrackIds = [];                // bgmBuffers 各轨对应的 BGM_FILES 原始下标（解码失败剔除后仍对齐曲目归属）
 let bgmCur = null, bgmNext = null;   // {src, gain, endAt}
@@ -102,19 +103,29 @@ function bgmPool() {
   for (let i = 0; i < bgmTrackIds.length; i++) if (classic ? bgmTrackIds[i] === 0 : bgmTrackIds[i] >= 1) p.push(i);
   return p.length ? p : all;   // 目标轨全部解码失败时回退到全部可播轨，保证有声
 }
-function bgmDecodeAll() {
-  if (bgmDecoding || bgmBuffers || bgmDecodeFailed) return;
-  bgmDecoding = true;
-  Promise.all(BGM_FILES.map(f =>
-    fetch(f).then(r => { if (!r.ok) throw new Error(f); return r.arrayBuffer(); })
+/* P2-A 懒加载：只加载当前模式所需音轨（classic=1 轨 wav / exclusive=7 轨 m4a），
+   每轨解码完成即并入播放列表（首轨就绪即可起播，不再等全部 8 轨）；切模式时补载缺失轨 */
+function bgmPoolIds(mode) { return mode === 'classic' ? [0] : [1, 2, 3, 4, 5, 6, 7]; }
+function bgmRebuild() {   // 由 bgmSlots 重建 bgmBuffers/bgmTrackIds（按 BGM_FILES 原始曲序）
+  bgmBuffers = []; bgmTrackIds = [];
+  for (let i = 0; i < bgmSlots.length; i++) if (bgmSlots[i]) { bgmBuffers.push(bgmSlots[i]); bgmTrackIds.push(i); }
+  if (!bgmBuffers.length) bgmBuffers = null;
+}
+let bgmAfterLoad = null;   // 一批加载完成后的回调（切模式补载就绪后再执行交叉渐变）
+function bgmDecodePool() {
+  if (bgmLoading) return;
+  const todo = bgmPoolIds(bgmMode()).filter(i => bgmSlots[i] === undefined);
+  if (!todo.length) return;
+  bgmLoading = true;
+  Promise.all(todo.map(i =>
+    fetch(BGM_FILES[i]).then(r => { if (!r.ok) throw new Error(BGM_FILES[i]); return r.arrayBuffer(); })
       .then(b => audioCtx.decodeAudioData(b))
-      .catch(() => null)
-  )).then(list => {
-    bgmDecoding = false;
-    bgmBuffers = [];
-    bgmTrackIds = [];          // 与 bgmBuffers 平行：记录每轨对应的 BGM_FILES 原始下标（解码失败的轨剔除后仍可正确按曲名选曲）
-    list.forEach((b, i) => { if (b) { bgmBuffers.push(b); bgmTrackIds.push(i); } });
-    if (!bgmBuffers.length) bgmDecodeFailed = true;
+      .then(buf => { bgmSlots[i] = buf; bgmRebuild(); })
+      .catch(() => { bgmSlots[i] = null; })
+  )).then(() => {
+    bgmLoading = false;
+    if (!bgmBuffers) bgmDecodeFailed = true;   // 所有已尝试轨均失败 → 程序化回退
+    if (bgmAfterLoad) { const f = bgmAfterLoad; bgmAfterLoad = null; f(); }
   });
 }
 function bgmStartTrack(idx, fade) {
@@ -130,7 +141,7 @@ function bgmStartTrack(idx, fade) {
   return { src, gain: g, endAt: now + buf.duration };
 }
 function bgmStartPlaylist() {
-  if (!bgmBuffers) { bgmDecodeAll(); return; }
+  if (!bgmBuffers) { bgmDecodePool(); return; }
   const pool = bgmPool();
   if (pool.indexOf(bgmIdx) < 0) bgmIdx = pool[0];   // 模式切换/首次起播：对齐到列表第一首（顺序播放，无随机）
   if (!bgmCur) bgmCur = bgmStartTrack(bgmIdx, 1.2);   // 首轨淡入
@@ -167,6 +178,14 @@ function bgmStopPlaylist(fade = 0.5) {
 function bgmSwitchTo(mode) {
   save.settings.bgmMode = (mode === 'classic') ? 'classic' : 'exclusive';
   persistSave();
+  const want = bgmMode();
+  // P2-A：目标池尚未加载（懒加载下首次切模式）→ 先补载，就绪回调后再走交叉渐变
+  if (bgmPoolIds(want).some(i => bgmSlots[i] === undefined)) {
+    bgmDecodeFailed = false;
+    bgmAfterLoad = () => { if (bgmMode() === want) bgmSwitchTo(want); };
+    bgmDecodePool();
+    return;
+  }
   if (!bgmBuffers || bgmDecodeFailed || !bgmCur) return;
   const pool = bgmPool();
   if (bgmIdx === pool[0]) return;   // 正在播目标列表第一首：不打断
@@ -207,7 +226,7 @@ function musicTick() {
     bgmStopPlaylist(0.8);   // 浪漫轨：淡出播放列表，程序化长音更贴合恋爱氛围
   } else if (!bgmDecodeFailed) {
     if (bgmBuffers) bgmStartPlaylist();
-    else bgmDecodeAll();    // 首次进入：启动解码（完成前程序化轨静音等待）
+    else bgmDecodePool();   // 首次进入：启动当前模式池的懒加载（完成前程序化轨静音等待）
   } else {
     bgmStopPlaylist(0.3);   // 全部解码失败：回退程序化欢快轨（下方排程）
   }
@@ -220,7 +239,7 @@ function musicTick() {
       if (romanticMusic) {
         if (LOVE_MELODY[s]) musicNote(midiHz(LOVE_MELODY[s]), t, sd * 1.6, 'sine', 0.055);
         if (LOVE_BASS[s])   musicNote(midiHz(LOVE_BASS[s]), t, sd * 3, 'triangle', 0.05);
-      } else if (!bgmDecoding) {   // 解码中先静音等待，避免与文件 BGM 重叠
+      } else if (!bgmLoading) {   // 解码中先静音等待，避免与文件 BGM 重叠
         if (MELODY[s]) musicNote(midiHz(MELODY[s]), t, sd * 0.9, 'triangle', 0.05);
         if (BASS[s])   musicNote(midiHz(BASS[s]), t, sd * 1.8, 'sine', 0.07);
         if (s % 4 === 2) musicNote(2400, t, 0.03, 'square', 0.012);   // 轻反拍打点

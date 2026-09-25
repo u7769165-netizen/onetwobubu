@@ -72,7 +72,10 @@ function encodeFrame(opcode, payloadBuf) {
   return Buffer.concat([header, payloadBuf]);
 }
 
-/* 解析客户端帧（客户端→服务端必须掩码）；返回可完整解析的帧与剩余字节 */
+const MAX_FRAME = 64 * 1024;      // P2-B：单帧载荷上限（游戏消息远小于此，防内存 DoS）
+const MAX_CONN_BUF = 256 * 1024;  // P2-B：连接累积缓冲上限
+
+/* 解析客户端帧（客户端→服务端必须掩码）；返回可完整解析的帧与剩余字节；tooBig=超限应断连 */
 function decodeFrames(buf) {
   const frames = [];
   let off = 0;
@@ -85,6 +88,7 @@ function decodeFrames(buf) {
     let p = off + 2;
     if (len === 126) { if (buf.length - p < 2) break; len = buf.readUInt16BE(p); p += 2; }
     else if (len === 127) { if (buf.length - p < 8) break; len = Number(buf.readBigUInt64BE(p)); p += 8; }
+    if (len > MAX_FRAME) return { frames: [], rest: Buffer.alloc(0), tooBig: true };
     let maskKey = null;
     if (masked) { if (buf.length - p < 4) break; maskKey = buf.subarray(p, p + 4); p += 4; }
     if (buf.length - p < len) break;
@@ -93,7 +97,7 @@ function decodeFrames(buf) {
     frames.push({ opcode, payload });
     off = p + len;
   }
-  return { frames, rest: Buffer.from(buf.subarray(off)) };
+  return { frames, rest: Buffer.from(buf.subarray(off)), tooBig: false };
 }
 
 /* 连接集合与房间表 */
@@ -126,7 +130,9 @@ httpServer.on('upgrade', (req, socket) => {
 function onData(conn, data) {
   // P0-3 性能优化：缓冲区为空时直接赋值，避免 Buffer.concat 拷贝
   conn.buf = conn.buf.length === 0 ? data : Buffer.concat([conn.buf, data]);
-  const { frames, rest } = decodeFrames(conn.buf);
+  if (conn.buf.length > MAX_CONN_BUF) { closeConn(conn); return; }   // P2-B：累积缓冲超限断连
+  const { frames, rest, tooBig } = decodeFrames(conn.buf);
+  if (tooBig) { sendCtrl(conn, 0x8); closeConn(conn); return; }      // P2-B：单帧超限断连
   conn.buf = rest;
   for (const f of frames) {
     if (f.opcode === 0x8) { sendCtrl(conn, 0x8); closeConn(conn); return; }   // close
@@ -242,4 +248,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { httpServer };
+module.exports = { httpServer, encodeFrame, decodeFrames, MAX_FRAME };

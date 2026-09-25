@@ -82,10 +82,11 @@ function httpJson(path) {
   await evl(`startLevel(0)`);
   await sleep(300);
   ok(await evl(`musicTimer !== null`), `C1 进入游玩启动音乐调度器`);
-  // 等待 8 轨解码（fetch + decodeAudioData）
-  await evl(`new Promise(r => { const c = setInterval(() => { if (bgmBuffers || bgmDecodeFailed) { clearInterval(c); r(1); } }, 100); setTimeout(() => { clearInterval(c); r(0); }, 8000); })`);
+  // P2-A 懒加载：默认 exclusive 模式只解码专属 7 轨（bgm0.wav 不加载）
+  await evl(`new Promise(r => { const c = setInterval(() => { if ((bgmBuffers && bgmBuffers.length === 7) || bgmDecodeFailed) { clearInterval(c); r(1); } }, 100); setTimeout(() => { clearInterval(c); r(0); }, 8000); })`);
   const nb = await evl(`bgmBuffers ? bgmBuffers.length : -1`);
-  ok(nb === 8, `C2 8 轨音频全部解码入播放列表（${nb} 轨）`);
+  ok(nb === 7, `C2 专属模式池 7 轨全部解码入播放列表（${nb} 轨，原版轨未加载）`);
+  ok(await evl(`bgmTrackIds.indexOf(0) < 0`), `C2b 原版 wav 未预载（懒加载生效）`);
   await sleep(400);
   ok(await evl(`!!bgmCur`), `C3 文件 BGM 播放列表已起播（当前轨运行中）`);
   ok(await evl(`audioCtx && audioCtx.state === 'running'`), `C4 AudioContext 运行中`);
@@ -96,8 +97,8 @@ function httpJson(path) {
   const xfade = await evl(`JSON.stringify({ cur: !!bgmCur, idx: bgmIdx })`);
   const xo = JSON.parse(xfade);
   ok(xo.cur && xo.idx !== idx0, `C5 交叉渐变平滑交接（曲序 ${idx0}→${xo.idx}，无中断）`);
-  // 循环边界：曲序推进到末轨后回绕到 0
-  await evl(`bgmIdx = BGM_FILES.length - 1; if (bgmCur) bgmCur.endAt = audioCtx.currentTime + 3`);
+  // 循环边界：曲序推进到池末轨后回绕（P2-A：用池内位置而非 BGM_FILES 长度）
+  await evl(`(() => { const p = bgmPool(); bgmIdx = p[p.length - 1]; })(); if (bgmCur) bgmCur.endAt = audioCtx.currentTime + 3`);
   await sleep(4300);
   ok(await evl(`bgmIdx >= 0 && bgmIdx < bgmBuffers.length`), `C6 播放列表循环不越界（回绕有效）`);
 
@@ -114,8 +115,10 @@ function httpJson(path) {
   await sleep(4300);
   ok(await evl(`bgmTrackIds[bgmIdx] === 1`), `C10 末首播完回绕到列表第一首（track 7→1）`);
   await evl(`(() => { const s = document.getElementById('bgmSelect'); s.value = 'classic'; s.dispatchEvent(new Event('change')); })()`);
-  await sleep(1400);   // 等交叉渐变交接
-  ok(await evl(`bgmMode() === 'classic' && bgmTrackIds[bgmIdx] === 0 && !!bgmCur`), `C11 切「原版经典旋律」平滑过渡到原版轨`);
+  // P2-A：首次切 classic 触发原版 wav 补载，就绪回调后再交叉渐变
+  await evl(`new Promise(r => { const c = setInterval(() => { if (!bgmLoading && bgmTrackIds.indexOf(0) >= 0) { clearInterval(c); r(1); } }, 100); setTimeout(() => { clearInterval(c); r(0); }, 8000); })`);
+  await sleep(1600);   // 等补载回调的交叉渐变交接
+  ok(await evl(`bgmMode() === 'classic' && bgmTrackIds[bgmIdx] === 0 && !!bgmCur`), `C11 切「原版经典旋律」补载原版轨并平滑过渡`);
   await evl(`if (bgmCur) bgmCur.endAt = audioCtx.currentTime + 3`);
   await sleep(4300);
   ok(await evl(`bgmTrackIds[bgmIdx] === 0 && !!bgmCur`), `C12 原版经典旋律循环续播`);

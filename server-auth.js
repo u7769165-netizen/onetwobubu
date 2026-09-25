@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.OWB_DATA_DIR || path.join(__dirname, 'data');   // P2-C：测试可注入独立数据目录
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 if (!fs.existsSync(SECRET_FILE)) fs.writeFileSync(SECRET_FILE, crypto.randomBytes(32).toString('hex'));
@@ -181,7 +181,10 @@ async function handleHTTP(req, res) {
       if (!rateOk('reg:' + ip, 3, 3600 * 1000)) return json(res, 429, { ok: false, msg: '注册过于频繁，请稍后再试' }, cors);
       const { name, pass, sec_q, sec_a } = b;
       if (!cookieOkName(name)) return json(res, 400, { ok: false, msg: '用户名需 2-20 位文字/字母/数字/下划线' }, cors);
-      if (typeof pass !== 'string' || pass.length < 8) return json(res, 400, { ok: false, msg: '密码至少 8 位' }, cors);
+      // P2-B 校验加固：密码/安全问题长度上限与服务端兜底（不依赖前端 maxlength）
+      if (typeof pass !== 'string' || pass.length < 8 || pass.length > 64) return json(res, 400, { ok: false, msg: '密码需 8-64 位' }, cors);
+      if (sec_q != null && String(sec_q).length > 40) return json(res, 400, { ok: false, msg: '安全问题过长' }, cors);
+      if (sec_a != null && String(sec_a).length > 40) return json(res, 400, { ok: false, msg: '安全答案过长' }, cors);
       if (userByName(name)) return json(res, 400, { ok: false, msg: '该用户名不可用' }, cors);
       const salt = crypto.randomBytes(16).toString('hex');
       const r = db.prepare('INSERT INTO users(name,salt,hash,sec_q,sec_a_hash,created) VALUES(?,?,?,?,?,?)')
@@ -245,7 +248,7 @@ async function handleHTTP(req, res) {
     if (p === '/api/reset' && req.method === 'POST') {     // 票据 → 重置密码（消耗全部剩余恢复码）
       const v = verifyToken(String(b.ticket || ''));
       if (!v || !v.ticket) return json(res, 400, { ok: false, msg: '找回凭证无效或已过期' }, cors);
-      if (typeof b.new_pass !== 'string' || b.new_pass.length < 8) return json(res, 400, { ok: false, msg: '新密码至少 8 位' }, cors);
+      if (typeof b.new_pass !== 'string' || b.new_pass.length < 8 || b.new_pass.length > 64) return json(res, 400, { ok: false, msg: '新密码需 8-64 位' }, cors);
       const u = db.prepare('SELECT * FROM users WHERE id=?').get(v.uid);
       if (!u) return json(res, 400, { ok: false, msg: '账号不存在' }, cors);
       const salt = crypto.randomBytes(16).toString('hex');
@@ -261,7 +264,7 @@ async function handleHTTP(req, res) {
       if (!me) return json(res, 401, { ok: false, msg: '未登录' }, cors);
       const u = db.prepare('SELECT * FROM users WHERE id=?').get(me);
       if (!safeEq(hashPass(String(b.old_pass || ''), u.salt), u.hash)) return json(res, 401, { ok: false, msg: '原密码错误' }, cors);
-      if (typeof b.new_pass !== 'string' || b.new_pass.length < 8) return json(res, 400, { ok: false, msg: '新密码至少 8 位' }, cors);
+      if (typeof b.new_pass !== 'string' || b.new_pass.length < 8 || b.new_pass.length > 64) return json(res, 400, { ok: false, msg: '新密码需 8-64 位' }, cors);
       const salt = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE users SET salt=?, hash=?, token_ver=token_ver+1 WHERE id=?').run(salt, hashPass(b.new_pass, salt), u.id);
       invalidateTokenVerCache(u.id);  // P0-2 缓存失效
@@ -295,4 +298,4 @@ async function handleHTTP(req, res) {
   }
 }
 
-module.exports = { handleHTTP, verifyToken, uidFromReq, ENFORCE, COOKIE, SEC_HEADERS };
+module.exports = { handleHTTP, verifyToken, uidFromReq, ENFORCE, COOKIE, SEC_HEADERS, signToken };
