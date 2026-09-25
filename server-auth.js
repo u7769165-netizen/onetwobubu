@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS recover(
 CREATE TABLE IF NOT EXISTS saves(
   uid INTEGER PRIMARY KEY, data TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 1, updated INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_saves_updated ON saves(updated);
 `);
 
 /* ---------- 密码 / 令牌 / 哈希 ---------- */
@@ -46,6 +47,23 @@ function signToken(uid, tokenVer, ttl) {
   const payload = uid + '.' + Math.floor(Date.now() / 1000 + ttl) + '.' + tokenVer;
   return payload + '.' + crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
 }
+
+/* ---------- P0-2 性能优化：token_ver 内存缓存 ---------- */
+const tokenVerCache = new Map(); // uid -> { ver, expires }
+const CACHE_TTL = 60 * 1000;   // 缓存 60 秒
+function getCachedTokenVer(uid) {
+  const entry = tokenVerCache.get(uid);
+  if (entry && entry.expires > Date.now()) return entry.ver;
+  tokenVerCache.delete(uid);
+  return null;
+}
+function setCachedTokenVer(uid, ver) {
+  tokenVerCache.set(uid, { ver, expires: Date.now() + CACHE_TTL });
+}
+function invalidateTokenVerCache(uid) {
+  tokenVerCache.delete(uid);
+}
+
 // 返回 {uid, ver} 或 null（t0='U' 普通令牌；'R' 找回票据）
 function verifyToken(token) {
   if (typeof token !== 'string') return null;
@@ -56,8 +74,14 @@ function verifyToken(token) {
   const uid = +parts[0], exp = +parts[1], ver = +parts[2];
   if (!(uid > 0) || exp < Math.floor(Date.now() / 1000)) return null;
   if (parts[2] === 'R') return { uid, ticket: true };
-  const row = db.prepare('SELECT token_ver FROM users WHERE id=?').get(uid);
-  if (!row || row.token_ver !== ver) return null;
+  // P0-2 性能优化：先查缓存，命中则跳过 DB 查询
+  let tokenVer = getCachedTokenVer(uid);
+  if (tokenVer === null) {
+    const row = db.prepare('SELECT token_ver FROM users WHERE id=?').get(uid);
+    tokenVer = row ? row.token_ver : -1;
+    setCachedTokenVer(uid, tokenVer);
+  }
+  if (tokenVer === -1 || tokenVer !== ver) return null;
   return { uid, ver };
 }
 function genCodes() {
@@ -212,6 +236,7 @@ async function handleHTTP(req, res) {
       if (!u) return json(res, 400, { ok: false, msg: '账号不存在' }, cors);
       const salt = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE users SET salt=?, hash=?, token_ver=token_ver+1, fail_cnt=0, lock_until=0 WHERE id=?').run(salt, hashPass(b.new_pass, salt), u.id);
+      invalidateTokenVerCache(u.id);  // P0-2 缓存失效
       const codes = genCodes();
       db.prepare('DELETE FROM recover WHERE uid=?').run(u.id);
       for (const c of codes) db.prepare('INSERT INTO recover(uid,code_hash) VALUES(?,?)').run(u.id, sha256(c.toUpperCase()));
@@ -225,6 +250,7 @@ async function handleHTTP(req, res) {
       if (typeof b.new_pass !== 'string' || b.new_pass.length < 8) return json(res, 400, { ok: false, msg: '新密码至少 8 位' }, cors);
       const salt = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE users SET salt=?, hash=?, token_ver=token_ver+1 WHERE id=?').run(salt, hashPass(b.new_pass, salt), u.id);
+      invalidateTokenVerCache(u.id);  // P0-2 缓存失效
       return json(res, 200, { ok: true }, Object.assign(cors, setCookie(req, res, '', 0)));
     }
 

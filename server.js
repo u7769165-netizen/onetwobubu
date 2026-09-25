@@ -39,15 +39,19 @@ const httpServer = http.createServer((req, res) => {
     const headers = {
       'Content-Type': MIME[ext] || 'application/octet-stream',
       ETag: etag,
+      'Content-Length': st.size,  // P0-1 性能优化：提前告知客户端文件大小
       // 代码类（html/js/css）no-cache 每次重验证（开发期改动即时生效）；图片/音频长缓存（文件更新 mtime 变 → ETag 变，安全）
       'Cache-Control': LONG_CACHE.includes(ext)
         ? 'public, max-age=86400, must-revalidate' : 'no-cache',
     };
     if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
-    fs.readFile(file, (err2, buf) => {
-      if (err2) { res.writeHead(404); return res.end('not found'); }
-      res.writeHead(200, headers);
-      res.end(buf);
+    // P0-1 性能优化：流式传输替代 fs.readFile，减少内存占用
+    const stream = fs.createReadStream(file);
+    res.writeHead(200, headers);
+    stream.pipe(res);
+    stream.on('error', () => {
+      res.writeHead(404);
+      res.end('not found');
     });
   });
 });
@@ -120,7 +124,8 @@ httpServer.on('upgrade', (req, socket) => {
 });
 
 function onData(conn, data) {
-  conn.buf = Buffer.concat([conn.buf, data]);
+  // P0-3 性能优化：缓冲区为空时直接赋值，避免 Buffer.concat 拷贝
+  conn.buf = conn.buf.length === 0 ? data : Buffer.concat([conn.buf, data]);
   const { frames, rest } = decodeFrames(conn.buf);
   conn.buf = rest;
   for (const f of frames) {
