@@ -335,6 +335,7 @@ function applyTouchVisibility() {
   const show = t === 'on' || (t === 'auto' && window.matchMedia && matchMedia('(pointer: coarse)').matches);
   touchPadVisible = show;
   document.body.classList.toggle('touch', show);
+  fitViewport();   // body.touch class 刚切换，全屏门控随之进出
 }
 function initTouchLayer() {
   if (!window.PointerEvent) return;   // 老环境静默降级为纯键盘
@@ -702,6 +703,10 @@ initTouchLayer();
 applyTouchVisibility();
 updateTouchMode();
 showScreen('title');
+// 视口变化（旋转/iOS 地址栏收放/窗口缩放）→ 防抖重算触屏横屏全屏逻辑视口（门控在 fitViewport 内，桌面为 no-op）
+window.addEventListener('resize', scheduleFit);
+window.addEventListener('orientationchange', scheduleFit);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleFit);
 // 每日陪伴 / 纪念日飘带：秒级倒计时，归零自动收起
 setInterval(() => {
   if (albumBanner && albumBanner.t > 0) {

@@ -33,11 +33,11 @@ function drawBackground(theme) {
 
   if (theme.celestial === 'moon' || theme.celestial === 'both') {
     ctx.fillStyle = 'rgba(255,244,200,.25)';
-    ctx.beginPath(); ctx.arc(548, 62, 42, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W - 92, 62, 42, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#f6ecc8';
-    ctx.beginPath(); ctx.arc(548, 62, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W - 92, 62, 26, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = theme.sky[0];
-    ctx.beginPath(); ctx.arc(538, 54, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W - 102, 54, 22, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,.85)';
     for (let i = 0; i < 24; i++) {
       const sx = (i * 173) % W, sy = (i * 97) % (H * 0.55);
@@ -54,7 +54,7 @@ function drawBackground(theme) {
     }
   } else if (theme.celestial === 'ember') {
     ctx.fillStyle = 'rgba(255,110,40,.18)';
-    ctx.beginPath(); ctx.arc(320, 330, 160, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W / 2, 330, 160, 0, Math.PI * 2); ctx.fill();
     for (let i = 0; i < 14; i++) {
       const ex = (i * 211 + animT * 18) % W;
       const ey = H - ((animT * 26 + i * 61) % H);
@@ -62,7 +62,7 @@ function drawBackground(theme) {
       ctx.fillRect(ex, ey, 2, 2);
     }
   } else {
-    const sx = theme.celestial === 'sunLow' ? 120 : 540;
+    const sx = theme.celestial === 'sunLow' ? 120 : W - 100;
     const sy = theme.celestial === 'sunLow' ? 90 : 58;
     ctx.fillStyle = 'rgba(255,240,180,.5)';
     ctx.beginPath(); ctx.arc(sx, sy, 46, 0, Math.PI * 2); ctx.fill();

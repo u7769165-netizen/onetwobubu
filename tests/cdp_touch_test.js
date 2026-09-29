@@ -89,12 +89,19 @@ let chrome;
     const h = document.getElementById('touchGuide').classList.contains('hidden');
     s.value = 'auto'; s.dispatchEvent(new Event('change')); localStorage.setItem('onetwobubu_touchguide_seen', '1'); return h })()`);
   ok(r === true, 'A11 touch=off 不弹引导');
-  /* 触屏游玩画面最大化：.ctrls 隐藏 + HUD 悬浮 + 画布按剩余高度撑开（844×390 期望 ~419px 宽） */
-  r = JSON.parse(await evl(`(() => { const w = document.getElementById('wrap').getBoundingClientRect();
-    return JSON.stringify({ wrapW: Math.round(w.width), ctrls: getComputedStyle(document.querySelector('.ctrls')).display, hudPos: getComputedStyle(document.getElementById('hud')).position }) })()`));
-  ok(r.wrapW >= 400 && r.ctrls === 'none' && r.hudPos === 'fixed', 'A12 触屏游玩按钮行隐藏+HUD悬浮+画布扩至' + r.wrapW + 'px', JSON.stringify(r));
+  /* 触屏横屏无黑边全屏：#wrap 铺满视口 + 画布缓冲随设备比例（844×390→逻辑 866×400×DPR2）+ CSS 无拉伸 */
+  r = JSON.parse(await evl(`(() => { const w = document.getElementById('wrap').getBoundingClientRect(); const cv = document.getElementById('game').getBoundingClientRect();
+    return JSON.stringify({ wrapW: Math.round(w.width), wrapH: Math.round(w.height), logW: LOGICAL_W, bufW: canvas.width, bufH: canvas.height, tf: ctx.getTransform().a,
+      cvW: cv.width, cvH: cv.height, ctrls: getComputedStyle(document.querySelector('.ctrls')).display, hudPos: getComputedStyle(document.getElementById('hud')).position }) })()`));
+  const ratioDiff = Math.abs(r.cvW / r.cvH - r.bufW / r.bufH);
+  ok(r.wrapW >= 840 && r.wrapH >= 385 && r.logW === 866 && r.bufW === 1732 && r.bufH === 800 && r.tf === 2 && ratioDiff < 0.01 && r.ctrls === 'none' && r.hudPos === 'fixed',
+    'A12 横屏全屏：wrap 铺满+缓冲 866×400×2+无拉伸(Δ比例 ' + ratioDiff.toFixed(4) + ')', JSON.stringify(r));
   await evl(`document.getElementById('hud').textContent = '第 1/23 关 · 🍰 0/1 · 🧋 0/1 · ⭐ 0/1 · 💕 0/1'`);
-  await shot('touch_play_big.png');
+  await shot('touch_play_fullscreen.png');
+  /* 门控回归：离开 play（title 界面）逻辑视口回 640，桌面/菜单不受全屏影响 */
+  r = JSON.parse(await evl(`(() => { showScreen('title'); return JSON.stringify({ logW: LOGICAL_W, bufW: canvas.width }) })()`));
+  ok(r.logW === 640 && r.bufW === 1280, 'A13 回 title 退出全屏→LOGICAL_W 回 640', JSON.stringify(r));
+  await evl(`showScreen('play'); loadLevel(0, false)`);
 
   /* ===== B. 键组映射与多指 ===== */
   await pdown('tpLeft', 11);

@@ -540,7 +540,9 @@ function updateAnim(p, dt) {
 
 /* ================= 相机（横版卷轴：跟随双人中点，限制在关卡边界内） ================= */
 function cameraTarget() {
-  const maxCam = Math.max(0, cols * TILE - LOGICAL_W);
+  const mapW = cols * TILE;
+  if (mapW <= LOGICAL_W) return (mapW - LOGICAL_W) / 2;   // 地图窄于视口：居中（负 camX），两侧露天空（当前 48 列关卡用不到，防御未来小关卡）
+  const maxCam = Math.max(0, mapW - LOGICAL_W);
   if (players.length < 2) return 0;
   const mid = (players[0].x + players[0].w / 2 + players[1].x + players[1].w / 2) / 2;
   return Math.max(0, Math.min(maxCam, mid - LOGICAL_W / 2));

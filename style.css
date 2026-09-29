@@ -367,6 +367,16 @@
     padding: 2px 12px; font-size: 12px; letter-spacing: 1px; min-height: 0; white-space: nowrap; }
   body.touch.play #wrap { width: min(96vw, 1080px, calc((100vh - 16px - var(--tp-h)) * 1.6)); }
   body.touch.play #wrap { width: min(96vw, 1080px, calc((100dvh - 16px - var(--tp-h)) * 1.6)); }   /* dvh 双声明回退 */
+  /* 触屏横屏无黑边全屏：#wrap 铺满视口、不再为按键带扣高（按键直接悬浮画面上），
+     canvas 按缓冲固有比例 contain 显示（JS fitViewport 已把缓冲比例调成≈视口比例，手机铺满无黑边；
+     iPad 等比例<1.6 设备 LOGICAL_W 钳 640，上下留天空色条——不拉伸不裁切的唯一解）。
+     门控与 ui.js fitViewport() 逐字等价，改动须两侧同步。 */
+  @media (pointer: coarse) and (orientation: landscape) {
+    body.touch.play { padding-bottom: 0; }
+    body.touch.play #wrap { width: 100vw; height: 100vh; height: 100dvh; aspect-ratio: auto; border-radius: 0; box-shadow: none;
+      display: flex; align-items: center; justify-content: center; }
+    body.touch.play #wrap canvas { width: auto; height: auto; max-width: 100%; max-height: 100%; }
+  }
   /* 触屏首启引导层：全屏半透明遮罩 + 就近标注四个虚拟键（safe-area 公式与 .tpad 同一套） */
   #touchGuide { position: fixed; inset: 0; pointer-events: auto; cursor: pointer; background: rgba(12,8,22,.55); -webkit-tap-highlight-color: transparent; }
   #touchGuide.hidden { display: none; }

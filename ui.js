@@ -231,6 +231,7 @@ function showScreen(name) {
     netRoomShow.textContent = net.role === 'host' ? net.room : '';
     netStatus(net.connected ? (net.peerOnline ? '队友在线' : '已连接，等待队友…') : '未连接');
   }
+  fitViewport();   // body.play class 刚切换，逻辑视口随之进出全屏
 }
 
 function updateTitleUI() {
@@ -419,13 +420,34 @@ function buildMap() {
 
 /* ---- 高清渲染：2x 后备画布，解决角色清晰度低 ---- */
 const DPR = 2;
-const LOGICAL_W = 640, LOGICAL_H = 400;
+let LOGICAL_W = 640;
+const LOGICAL_H = 400;
 canvas.width = LOGICAL_W * DPR;
 canvas.height = LOGICAL_H * DPR;
 const ctx = canvas.getContext('2d');
 ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 ctx.imageSmoothingEnabled = true;
 ctx.imageSmoothingQuality = 'high';
+
+/* ---- 触屏横屏无黑边全屏：可变逻辑视口（高度恒 400，宽度随设备比例）----
+   门控条件与 style.css 的 @media (pointer:coarse) and (orientation:landscape) + body.touch.play 逐字等价，
+   两侧不一致会导致画布缓冲与 CSS 显示比例脱节（拉伸）。仅触屏横屏游玩生效，桌面/竖屏恒 640。 */
+function fitViewport() {
+  const full = matchMedia('(pointer: coarse)').matches && matchMedia('(orientation: landscape)').matches &&
+    document.body.classList.contains('touch') && document.body.classList.contains('play');
+  let next = 640;
+  if (full) next = Math.max(640, Math.min(1280, Math.round(LOGICAL_H * innerWidth / innerHeight)));
+  if (next !== 640 && LOGICAL_W !== 640 && Math.abs(next - LOGICAL_W) < 2) return;   // 滞回：忽略 iOS 地址栏动画小幅抖动
+  if (next === LOGICAL_W) return;
+  LOGICAL_W = next;
+  canvas.width = LOGICAL_W * DPR;   // width 赋值会重置 transform/平滑，必须全部重做
+  canvas.height = LOGICAL_H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+}
+let fitTimer = null;
+function scheduleFit() { clearTimeout(fitTimer); fitTimer = setTimeout(fitViewport, 150); }   // resize/旋转/地址栏收放防抖
 
 function showOverlay(title, sub, grade, detail) {
   overlay.querySelector('.title').textContent = title;
