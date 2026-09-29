@@ -35,6 +35,7 @@ function netConnect(action, room) {
   const url = document.getElementById('netAddr').value.trim();
   net.want = { action, room, char: +document.getElementById('netChar').value };
   net.rate = +document.getElementById('netRate').value;
+  net.rateManual = net.rate;   // 弱网自适应基线：恢复目标/手动优先
   net.delay = +document.getElementById('netDelay').value;
   netStatus('连接中…');
   try { net.ws = new WebSocket(url); } catch (e) { netStatus('地址无效'); return; }
@@ -123,12 +124,16 @@ function netOnMsg(m) {
       if (net.lastPingSent && m.ts === net.lastPingSent) { net.ping = Math.round((performance.now() - m.ts) / 2); }
       else netSend({ t: 'pg', ts: m.ts });
       break;
+    case 'adv':   // 客机弱网/恢复建议：仅主机执行（rate 只在主机侧消费）
+      if (net.role === 'host') applyNetRate(+m.hz || 20, 'peer');
+      break;
   }
 }
 
 function netReset() {
   net.mode = 'offline'; net.role = null; net.room = ''; net.peerOnline = false; net.ping = -1;
   net.remoteInput = { d: 0, j: 0 }; net.snapBuf = []; net.ver = 0; netWaiting = false; net.soloAllowed = false;
+  netAdapt.bad = 0; netAdapt.good = 0; netAdapt.lastAdj = 0;
   clearTimeout(net.reconnectTimer);
   netBar.classList.remove('show');
 }
@@ -139,6 +144,42 @@ function netLeave() {
   net.ws = null; netReset();
   updateTouchMode();
 }
+
+/* ================================================================
+   弱网自适应：挂在既有 2s ping 分支采样 RTT，迟滞防抖调快照率。
+   rate 仅主机消费（netHostFrame），客机判定弱网时发 {t:'adv'} 建议、
+   由主机执行；手动改 #netRate 下拉优先（change 监听更新 rateManual）。
+   ================================================================ */
+const netAdapt = { bad: 0, good: 0, lastAdj: 0 };
+function applyNetRate(hz, src) {
+  if (net.rate === hz) return;
+  net.rate = hz;
+  const sel = document.getElementById('netRate');
+  for (const o of sel.options) if (+o.value === hz) { sel.value = String(hz); break; }
+  authToast(src === 'restore' ? '网络已恢复，快照率回到 ' + hz + 'Hz'
+    : src === 'peer' ? '队友网络较弱，快照率降到 ' + hz + 'Hz'
+    : '检测到弱网，快照率自动降到 ' + hz + 'Hz');
+}
+function netAdaptSample(now) {
+  if (net.mode !== 'online' || !net.connected || net.ping < 0 || !net.rateManual) return;
+  const rtt = net.ping * 2;
+  if (rtt > 300) { netAdapt.bad++; netAdapt.good = 0; }
+  else if (rtt < 180) { netAdapt.good++; netAdapt.bad = 0; }
+  else { netAdapt.bad = 0; netAdapt.good = 0; }          // 死区：双向清零防抖
+  if (now - netAdapt.lastAdj < 15000) return;            // 最小调整间隔
+  if (netAdapt.bad >= 3 && net.rate > 10) {              // 连续 3 样本弱网 → 降 10Hz
+    netAdapt.lastAdj = now; netAdapt.bad = 0; netAdapt.good = 0;
+    if (net.role === 'host') applyNetRate(10, 'auto');
+    else netSend({ t: 'adv', hz: 10 });
+  } else if (netAdapt.good >= 10 && net.rate !== net.rateManual) {   // 连续 10 样本良好 → 恢复手动基线
+    netAdapt.lastAdj = now; netAdapt.bad = 0; netAdapt.good = 0;
+    if (net.role === 'host') applyNetRate(net.rateManual, 'restore');
+    else netSend({ t: 'adv', hz: net.rateManual });
+  }
+}
+document.getElementById('netRate').addEventListener('change', e => {
+  net.rateManual = +e.target.value; net.rate = +e.target.value;   // 手动优先：自适应只恢复到该基线
+});
 
 /* ---------- 主机：广播与钩子 ---------- */
 function netHostFrame(now) {
@@ -161,7 +202,7 @@ function netHostFrame(now) {
         Math.round(boss.hitFlash * 100) / 100, Math.round(boss.deathT * 100) / 100, boss.attack] : 0,
     });
   }
-  if (!net._lastPing || now - net._lastPing > 2000) { net._lastPing = now; net.lastPingSent = performance.now(); netSend({ t: 'pg', ts: net.lastPingSent }); }
+  if (!net._lastPing || now - net._lastPing > 2000) { net._lastPing = now; net.lastPingSent = performance.now(); netSend({ t: 'pg', ts: net.lastPingSent }); netAdaptSample(now); }
 }
 
 function netHostAnnounceLevel() {   // loadLevel 末尾由主机调用
@@ -275,7 +316,7 @@ function guestFrame(dt) {
   if (!net._lastIn || now - net._lastIn > 33 || net.remoteInput.d !== d || net.remoteInput.j !== j) {
     net._lastIn = now; netSend({ t: 'in', d, j });
   }
-  if (!net._lastPing || now - net._lastPing > 2000) { net._lastPing = now; net.lastPingSent = performance.now(); netSend({ t: 'pg', ts: net.lastPingSent }); }
+  if (!net._lastPing || now - net._lastPing > 2000) { net._lastPing = now; net.lastPingSent = performance.now(); netSend({ t: 'pg', ts: net.lastPingSent }); netAdaptSample(now); }
   updateHUD();
   render();
 }

@@ -129,6 +129,28 @@ async function boot(client, port) {
     const inc = rb.xs.length >= 2 && rb.xs[rb.xs.length - 1] > rb.xs[0];
     check('快照序列递增', inc, JSON.stringify(rb.xs));
 
+    // ---------- 弱网自适应：客机 adv 建议 → 主机执行 / 防抖窗 / 恢复基线 / 手动优先 ----------
+    await B.evalJs(`(() => { const _s = netSend; window.__sentB = {}; netSend = function(o){ window.__sentB[o.t] = (window.__sentB[o.t]||0)+1; return _s(o); }; return 'gb'; })()`);
+    // 客机伪造弱 RTT（ping=200→RTT400>300）连续 3 样本 → 发 1 条 adv
+    const adv1 = JSON.parse(await B.evalJs(`(() => { net.ping = 200; netAdapt.bad=0; netAdapt.good=0; netAdapt.lastAdj=performance.now()-15000; const t0=performance.now(); for(let i=0;i<3;i++) netAdaptSample(t0+i*100); return JSON.stringify({adv: window.__sentB.adv||0, rateB:net.rate}); })()`));
+    check('客机 3 弱样本后发 adv 建议', adv1.adv === 1 && adv1.rateB === 20, JSON.stringify(adv1));
+    await sleep(500);   // 等中继透传 + 主机执行
+    const rateA = JSON.parse(await A.evalJs(`JSON.stringify({rate:net.rate, sel:document.getElementById('netRate').value})`));
+    check('主机执行 adv 降 10Hz 并同步下拉', rateA.rate === 10 && rateA.sel === '10', JSON.stringify(rateA));
+    // 防抖：15s 最小间隔内继续弱样本不再重复发
+    const adv2 = JSON.parse(await B.evalJs(`(() => { net.ping = 200; netAdapt.bad=0; for(let i=0;i<5;i++) netAdaptSample(performance.now()+i); return JSON.stringify({adv: window.__sentB.adv||0}); })()`));
+    check('防抖窗内不重复发 adv', adv2.adv === 1, JSON.stringify(adv2));
+    // 主机侧 10 良好样本（RTT160<180）→ 自动恢复手动基线 20Hz
+    const rec = JSON.parse(await A.evalJs(`(() => { net.ping = 80; netAdapt.bad=0; netAdapt.good=0; netAdapt.lastAdj=performance.now()-15000; const t0=performance.now(); for(let i=0;i<10;i++) netAdaptSample(t0+i*100); return JSON.stringify({rate:net.rate, sel:document.getElementById('netRate').value}); })()`));
+    check('10 良好样本后主机恢复 20Hz', rec.rate === 20 && rec.sel === '20', JSON.stringify(rec));
+    // 死区（180~300）清零计数
+    const dead = JSON.parse(await A.evalJs(`(() => { net.ping = 100; netAdaptSample(performance.now()+100000); return JSON.stringify({bad:netAdapt.bad, good:netAdapt.good}); })()`));
+    check('RTT 死区双向清零', dead.bad === 0 && dead.good === 0, JSON.stringify(dead));
+    // 手动改下拉优先：rateManual 更新
+    const man = JSON.parse(await A.evalJs(`(() => { const sel=document.getElementById('netRate'); sel.value='30'; sel.dispatchEvent(new Event('change')); return JSON.stringify({manual:net.rateManual, rate:net.rate}); })()`));
+    check('手动下拉优先（rateManual=30 即时生效）', man.manual === 30 && man.rate === 30, JSON.stringify(man));
+    await A.evalJs(`(() => { const sel=document.getElementById('netRate'); sel.value='20'; sel.dispatchEvent(new Event('change')); return 'r'; })()`);
+
     // 截图
     const shot = async (c, name) => { const r = await c.send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(OUT + '\\' + name, Buffer.from(r.result.data, 'base64')); };
     await shot(B, 'net_guest.png');
