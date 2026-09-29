@@ -41,6 +41,7 @@ const httpServer = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p.startsWith('/api/')) { auth.handleHTTP(req, res); return; }   // 账号/云存档 API
   if (p === '/' || p === '') p = '/index.html';
+  if (p === '/qr') p = '/qr.html';   // 扫码即玩无扩展名入口
   const file = path.join(ROOT, p);
   if (!file.startsWith(ROOT)) { res.writeHead(403, auth.SEC_HEADERS); return res.end('forbidden'); }
   fs.stat(file, (err, st) => {
@@ -262,6 +263,7 @@ if (require.main === module) {
     console.log('联机中继：ws://<本机IP>:' + PORT + '/ws');
     const ips = lanIPs();
     if (ips.length) console.log('局域网地址：' + ips.map(i => 'http://' + i + ':' + PORT).join('  '));
+    console.log('扫码即玩：' + url + '/qr —— 手机相机/浏览器扫码直接打开游玩；经隧道访问本页时二维码自动为公网地址');
     console.log('提示：互联网联机需将本目录部署到公网服务器（或内网穿透 8765 端口），游戏内联机大厅填入对应地址。');
     console.log('关闭此窗口即可停止游戏。');
     // 启动成功后再打开浏览器，避免连不上

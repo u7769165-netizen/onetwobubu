@@ -7,6 +7,7 @@ const CORE = [
   './mechanics.js', './render.js', './net.js', './auth.js', './game.js',
   './一二.png', './布布.png', './一二侧面.png', './布布侧面.png',
   './pwa-icon-192.png', './pwa-icon-512.png',
+  './qr.html', './qr.js',
 ];
 
 self.addEventListener('install', e => {

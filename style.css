@@ -431,3 +431,15 @@
 .pw-meter[data-lvl="3"] b{color:#8fe3b0}
 .auth-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(12px);background:rgba(40,20,30,.92);border:1px solid rgba(255,143,179,.5);color:#ffe3ee;border-radius:10px;padding:9px 16px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:9999;max-width:86vw;text-align:center}
 .auth-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ===== 扫码即玩页（qr.html · /qr）===== */
+body.qr-page{overflow:auto;padding:24px 16px calc(28px + env(safe-area-inset-bottom))}
+.qr-card{max-width:420px;margin:0 auto;display:flex;flex-direction:column;align-items:center;text-align:center;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.9);border-radius:18px;box-shadow:0 10px 40px rgba(150,110,80,.25);padding:26px 22px calc(22px + env(safe-area-inset-bottom))}
+.qr-title{font-size:26px;letter-spacing:4px;color:#7a5c48;text-shadow:0 2px 0 #fff}
+.qr-sub{font-size:13px;color:#a08363;margin:6px 0 18px;letter-spacing:1px}
+.qr-box{width:min(72vw,280px);min-height:40px;background:#fff;border-radius:12px;padding:10px;box-shadow:0 4px 14px rgba(150,110,80,.2);font-size:13px;color:#b39a7d;display:flex;align-items:center;justify-content:center}
+.qr-box svg{display:block;width:100%;height:auto}
+.qr-url{margin-top:14px;font-size:14px;color:#7a5c48;word-break:break-all;background:rgba(255,255,255,.8);border:1px dashed rgba(150,110,80,.4);border-radius:8px;padding:8px 12px;user-select:text;-webkit-user-select:text}
+.qr-tip{margin-top:12px;font-size:11px;line-height:1.7;color:#b39a7d}
+.qr-play{margin-top:16px;display:inline-block;background:linear-gradient(135deg,#ff8fb3,#ffb3c6);color:#fff;text-decoration:none;font-size:16px;letter-spacing:2px;padding:10px 28px;border-radius:24px;box-shadow:0 4px 12px rgba(255,143,179,.4);min-height:44px;line-height:24px}
+.qr-play:active{transform:scale(.97)}

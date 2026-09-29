@@ -71,6 +71,18 @@ module.exports = [
     rules: { 'no-undef': 'error', 'no-unused-vars': 'off' },
   },
   {
+    // 扫码即玩独立页面：独立作用域，不进 _extract_globals 共享全局（仿 sw.js block 先例）
+    files: ['qr.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: { document: 'readonly', location: 'readonly', URLSearchParams: 'readonly', console: 'readonly',
+                 globalThis: 'readonly', Math: 'readonly', Uint8Array: 'readonly', Array: 'readonly',
+                 String: 'readonly', Number: 'readonly', Error: 'readonly', Object: 'readonly' },
+    },
+    rules: { 'no-undef': 'error', 'no-unused-vars': ['warn', { vars: 'local', args: 'none', caughtErrors: 'none' }] },
+  },
+  {
     // Node 侧脚本（生成器/注入器/测试）：用 node 全局，规则更宽松
     files: ['_gen_levels.js', '_inject_levels.js', '_extract_globals.js', 'server.js', 'server-auth.js', 'rate-limit.js', 'tests/**/*.js'],
     languageOptions: {
