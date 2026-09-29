@@ -4,6 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const zlib = require('zlib');
 const crypto = require('crypto');
 const auth = require('./server-auth');
 
@@ -24,6 +25,18 @@ const MIME = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
+// P0-2 加载提速：文本类资源 gzip（手机移动网络下传输量降至约 1/3）
+const GZIP_EXT = ['.html', '.js', '.css', '.webmanifest', '.json', '.svg', '.txt'];
+const gzipCache = new Map(); // file -> { sig: size-mtime, buf }；文件 mtime/大小变化即重压
+function gzipFor(file, st) {
+  const sig = st.size + '-' + Math.floor(st.mtimeMs);
+  const hit = gzipCache.get(file);
+  if (hit && hit.sig === sig) return hit.buf;
+  const buf = zlib.gzipSync(fs.readFileSync(file), { level: 9 });
+  gzipCache.set(file, { sig, buf });
+  return buf;
+}
+
 const httpServer = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p.startsWith('/api/')) { auth.handleHTTP(req, res); return; }   // 账号/云存档 API
@@ -33,18 +46,26 @@ const httpServer = http.createServer((req, res) => {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, auth.SEC_HEADERS); return res.end('not found'); }
     const ext = path.extname(file).toLowerCase();
+    // P0-2：文本资源且客户端支持 gzip → 返回压缩体（ETag 加 -g 后缀区分两种编码形态）
+    const wantsGzip = GZIP_EXT.includes(ext) && /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
+    let gz = null;
+    if (wantsGzip) { try { gz = gzipFor(file, st); } catch (e) { gz = null; } }
     // ETag = 大小+mtime（弱校验即可）；命中 If-None-Match 直接 304，零字节传输
-    const etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"';
+    const etag = 'W/"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + (gz ? '-g' : '') + '"';
     const LONG_CACHE = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.m4a', '.wav', '.mp3'];
     const headers = Object.assign({}, auth.SEC_HEADERS, {  // P1-4 安全增强：CSP/nosniff/X-Frame-Options/Referrer-Policy
       'Content-Type': MIME[ext] || 'application/octet-stream',
       ETag: etag,
-      'Content-Length': st.size,  // P0-1 性能优化：提前告知客户端文件大小
+      'Content-Length': gz ? gz.length : st.size,  // P0-1 性能优化：提前告知客户端文件大小
       // 代码类（html/js/css）no-cache 每次重验证（开发期改动即时生效）；图片/音频长缓存（文件更新 mtime 变 → ETag 变，安全）
       'Cache-Control': LONG_CACHE.includes(ext)
         ? 'public, max-age=86400, must-revalidate' : 'no-cache',
+      // SW 写穿缓存按 Vary 分桶，防止 gzip/非 gzip 两种响应互相污染
+      'Vary': 'Accept-Encoding',
     });
+    if (gz) headers['Content-Encoding'] = 'gzip';
     if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); return res.end(); }
+    if (gz) { res.writeHead(200, headers); return res.end(gz); }
     // P0-1 性能优化：流式传输替代 fs.readFile，减少内存占用
     const stream = fs.createReadStream(file);
     res.writeHead(200, headers);
