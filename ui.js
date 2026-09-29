@@ -216,7 +216,7 @@ function showScreen(name) {
   if (name !== 'play') { running = false; overlay.classList.add('hidden'); paused = false; wasRunningBeforePause = false; pauseMenu.classList.add('hidden'); }
   ctrls.classList.toggle('hidden', name !== 'play');
   document.getElementById('touchLayer').classList.toggle('hidden', !(touchPadVisible && name === 'play'));
-  if (name === 'play') releaseAllTouch();
+  if (name === 'play') { releaseAllTouch(); maybeShowTouchGuide(); }
   netBar.classList.toggle('show', net.mode === 'online' && name === 'play');
   if (name === 'title') { dailyLoveCheck(); updateTitleUI(); }
   if (name === 'levels') buildLevelCards();

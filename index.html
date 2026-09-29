@@ -348,6 +348,17 @@
       <button class="tpad" id="tpJump" data-act="jump">⬆</button>
     </div>
     <div id="rotateHint">📱 建议横屏游玩</div>
+    <!-- 触屏首启引导层：粗指针设备首次进入 play 显示；点任意处关闭，首击被 preventDefault 抑制不穿透启动游戏 -->
+    <div id="touchGuide" class="hidden">
+      <div class="tg-center">
+        <div class="tg-title">💕 触屏操作指南</div>
+        <div class="tg-hint">点击任意处开始游戏</div>
+      </div>
+      <div class="tg-item tg-move">◀ ▶ 移动</div>
+      <div class="tg-item tg-jump">⬆ 跳跃</div>
+      <div class="tg-item tg-switch">🔄 换角色</div>
+      <div class="tg-item tg-pause">⏸ 暂停</div>
+    </div>
   </div>
 
 <script src="levels.js"></script>

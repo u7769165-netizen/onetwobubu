@@ -1,7 +1,8 @@
 /* 触屏虚拟按键专项测试（CDP headless Chrome，模拟 844×390 横屏移动设备）
-   覆盖：DOM/三态显示 / 键组映射 / 多指与双指同键 / 按键尺寸与反馈 / 暂停链路 / 防卡键 / 设置接线 / 触摸延迟 / 无异常 */
+   覆盖：DOM/三态显示 / 首启引导层 / 键组映射 / 多指与双指同键 / 按键尺寸与反馈 / 暂停链路 / 防卡键 / 设置接线 / 触摸延迟 / 无异常 */
 const { spawn } = require('child_process');
 const http = require('http');
+const fs = require('fs');
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const OUT = __dirname, PORT = 9254;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -36,6 +37,7 @@ let chrome;
   const wup = pid => evl(`window.dispatchEvent(new PointerEvent('pointerup',{pointerId:${pid},bubbles:true}))`);
   const releaseAll = () => evl(`releaseAllTouch()`);
   const rect = async btn => JSON.parse(await evl(`JSON.stringify(document.getElementById('${btn}').getBoundingClientRect())`));
+  const shot = async name => { const s = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(`${OUT}\\${name}`, Buffer.from(s.result.data, 'base64')); };
 
   await send('Runtime.enable'); await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 2, mobile: true });
@@ -43,7 +45,8 @@ let chrome;
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'pointer', value: 'coarse' }, { name: 'any-pointer', value: 'coarse' }] });
   await send('Page.navigate', { url: 'http://localhost:8765/' });
   await sleep(4500);
-  await evl(`localStorage.removeItem('onetwobubu_save_v1'); save = JSON.parse(JSON.stringify(save)); location.reload()`);
+  // 清档同时预置引导已读标记：后续真实触摸/流程段不被首启引导拦截（引导层专项断言见 A+ 段）
+  await evl(`localStorage.removeItem('onetwobubu_save_v1'); localStorage.setItem('onetwobubu_touchguide_seen','1'); save = JSON.parse(JSON.stringify(save)); location.reload()`);
   await sleep(4000);
 
   /* ===== A. DOM 与三态显示 ===== */
@@ -69,6 +72,23 @@ let chrome;
   r = await evl(`document.getElementById('touchLayer').classList.contains('hidden')`);
   ok(r === true, 'A7 非 play 界面按键层隐藏');
   await evl(`showScreen('play'); loadLevel(0, false)`); await sleep(300);
+
+  /* ===== A+. 首启引导层 ===== */
+  await evl(`localStorage.removeItem('onetwobubu_touchguide_seen'); document.getElementById('touchGuide').classList.add('hidden'); maybeShowTouchGuide()`);
+  r = await evl(`!document.getElementById('touchGuide').classList.contains('hidden')`);
+  ok(r === true, 'A8 清标记后 coarse+play → 引导弹出');
+  await shot('touch_guide_show.png');
+  await evl(`document.getElementById('touchGuide').dispatchEvent(new PointerEvent('pointerdown',{pointerId:91,bubbles:true,cancelable:true}))`);
+  r = JSON.parse(await evl(`JSON.stringify({ closed: document.getElementById('touchGuide').classList.contains('hidden'), seen: localStorage.getItem('onetwobubu_touchguide_seen'), run: running })`));
+  ok(r.closed === true && r.seen === '1' && r.run === false, 'A9 首击关闭引导并写标记且不穿透启动', JSON.stringify(r));
+  await evl(`maybeShowTouchGuide()`);
+  r = await evl(`document.getElementById('touchGuide').classList.contains('hidden')`);
+  ok(r === true, 'A10 已标记后不再弹出');
+  r = await evl(`(() => { const s = document.getElementById('touchSelect'); s.value = 'off'; s.dispatchEvent(new Event('change'));
+    localStorage.removeItem('onetwobubu_touchguide_seen'); maybeShowTouchGuide();
+    const h = document.getElementById('touchGuide').classList.contains('hidden');
+    s.value = 'auto'; s.dispatchEvent(new Event('change')); localStorage.setItem('onetwobubu_touchguide_seen', '1'); return h })()`);
+  ok(r === true, 'A11 touch=off 不弹引导');
 
   /* ===== B. 键组映射与多指 ===== */
   await pdown('tpLeft', 11);
@@ -189,9 +209,13 @@ let chrome;
   await releaseAll();
 
   /* ===== G. 联机角色钉死（模拟状态，不建真房间） ===== */
-  r = await evl(`(() => { const bak = net.mode; net.mode = 'online'; net.idx = 1; updateTouchMode(); const hidden = document.getElementById('tpSwitch').classList.contains('hidden'); net.mode = bak; net.idx = 0; updateTouchMode(); return JSON.stringify({ ti: 1, hidden, back: touchIdx }) })()`);
+  r = await evl(`(() => { const bak = net.mode; net.mode = 'online'; net.idx = 1; updateTouchMode();
+    const hidden = document.getElementById('tpSwitch').classList.contains('hidden');
+    const tgHidden = document.querySelector('#touchGuide .tg-switch').classList.contains('hidden');
+    net.mode = bak; net.idx = 0; updateTouchMode();
+    return JSON.stringify({ ti: 1, hidden, tgHidden, back: touchIdx }) })()`);
   r = JSON.parse(r);
-  ok(r.hidden === true && r.back === 0, 'G1 联机中换角色钮隐藏且退出恢复', JSON.stringify(r));
+  ok(r.hidden === true && r.tgHidden === true && r.back === 0, 'G1 联机中换角色钮与引导标注同步隐藏且退出恢复', JSON.stringify(r));
 
   ok(exceptions.length === 0, `G2 全程无未捕获异常（${exceptions.length}）`, exceptions.slice(0, 2).join(' | '));
 

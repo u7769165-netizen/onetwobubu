@@ -306,6 +306,28 @@ function updateTouchMode() {
     sw.classList.toggle('hidden', online);
     sw.textContent = touchIdx === 0 ? '🔄 一二' : '🔄 布布';
   }
+  const tgSw = document.querySelector('#touchGuide .tg-switch');
+  if (tgSw) tgSw.classList.toggle('hidden', online);   // 联机钉死角色，引导层同步隐藏换角色标注
+}
+/* ================= 触屏首启引导层 =================
+   显示条件：play 界面 + 按键层可见 + 粗指针设备 + localStorage 未标记。
+   首击不穿透：pointerdown 上 preventDefault 抑制同点位兼容 mousedown/click——否则 guide 关闭变
+   display:none 后，兼容 click 落到下层 #wrap 误启动游戏。 */
+const TOUCH_GUIDE_KEY = 'onetwobubu_touchguide_seen';
+function maybeShowTouchGuide() {
+  if (screenMode !== 'play' || !touchPadVisible) return;
+  if (!window.matchMedia || !matchMedia('(pointer: coarse)').matches) return;
+  let seen;
+  try { seen = localStorage.getItem(TOUCH_GUIDE_KEY); } catch (e) { seen = '1'; }   // 隐私模式取不到存储则不打扰
+  if (seen === '1') return;
+  const g = document.getElementById('touchGuide');
+  if (g) g.classList.remove('hidden');
+}
+function dismissTouchGuide() {
+  const g = document.getElementById('touchGuide');
+  if (!g || g.classList.contains('hidden')) return;
+  g.classList.add('hidden');
+  try { localStorage.setItem(TOUCH_GUIDE_KEY, '1'); } catch (e) {}
 }
 /* 三态显示判定：auto=粗指针设备显示 / on=总是 / off=关闭 */
 function applyTouchVisibility() {
@@ -354,6 +376,12 @@ function initTouchLayer() {
   });
   // 外接触屏热插拔时刷新 auto 判定（老 Safari 无 addEventListener 则忽略）
   try { matchMedia('(pointer: coarse)').addEventListener('change', applyTouchVisibility); } catch (e) {}
+  // 首启引导：点任意处关闭；preventDefault 抑制兼容 click，保证首击不穿透到 #wrap 启动游戏
+  const guide = document.getElementById('touchGuide');
+  if (guide) guide.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    dismissTouchGuide();
+  });
 }
 
 /* 死亡统一处理：置死、计数、音效、提示、延迟重载本层。
