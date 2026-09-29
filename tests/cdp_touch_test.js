@@ -89,6 +89,12 @@ let chrome;
     const h = document.getElementById('touchGuide').classList.contains('hidden');
     s.value = 'auto'; s.dispatchEvent(new Event('change')); localStorage.setItem('onetwobubu_touchguide_seen', '1'); return h })()`);
   ok(r === true, 'A11 touch=off 不弹引导');
+  /* 触屏游玩画面最大化：.ctrls 隐藏 + HUD 悬浮 + 画布按剩余高度撑开（844×390 期望 ~419px 宽） */
+  r = JSON.parse(await evl(`(() => { const w = document.getElementById('wrap').getBoundingClientRect();
+    return JSON.stringify({ wrapW: Math.round(w.width), ctrls: getComputedStyle(document.querySelector('.ctrls')).display, hudPos: getComputedStyle(document.getElementById('hud')).position }) })()`));
+  ok(r.wrapW >= 400 && r.ctrls === 'none' && r.hudPos === 'fixed', 'A12 触屏游玩按钮行隐藏+HUD悬浮+画布扩至' + r.wrapW + 'px', JSON.stringify(r));
+  await evl(`document.getElementById('hud').textContent = '第 1/23 关 · 🍰 0/1 · 🧋 0/1 · ⭐ 0/1 · 💕 0/1'`);
+  await shot('touch_play_big.png');
 
   /* ===== B. 键组映射与多指 ===== */
   await pdown('tpLeft', 11);
