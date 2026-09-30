@@ -195,6 +195,13 @@ let chrome;
     return JSON.stringify({ sel: cs.userSelect, bta: bcs.touchAction, cta: ccs.touchAction }) })()`));
   ok(r.sel === 'none' && r.bta === 'manipulation' && r.cta === 'manipulation',
     'B14 按键禁长按选字 + 游玩态禁双击缩放（touch-action:manipulation）', JSON.stringify(r));
+  r = JSON.parse(await evl(`(() => { const cs = getComputedStyle(document.getElementById('touchLayer'), '::before');
+    const bh = parseFloat(cs.height); const bg = cs.backgroundImage || '';
+    const tops = ['tpLeft', 'tpRight', 'tpJump', 'tpSwitch'].filter(i => document.getElementById(i).offsetParent !== null)
+      .map(i => document.getElementById(i).getBoundingClientRect().top);
+    return JSON.stringify({ bh, svg: bg.includes('svg'), bandTop: Math.round(innerHeight - bh), minKeyTop: Math.round(Math.min(...tops)) }) })()`));
+  ok(r.bh >= 110 && r.svg && r.minKeyTop >= r.bandTop,
+    'B15 底部按键带（地面方格装饰）存在且所有按键坐落带内', JSON.stringify(r));
   await pdown('tpJump', 41);
   r = await evl(`document.getElementById('tpJump').classList.contains('on')`);
   ok(r === true, 'B11 按下有 .on 反馈样式');

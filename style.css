@@ -330,6 +330,16 @@
   /* fixed 全屏层挂在 #wrap 外：z-index 4 < .screen 5，暂停菜单自动盖住按键；层本体穿透，仅按键可点 */
   #touchLayer { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
   #touchLayer.hidden { display: none; }
+  /* 按键带：画面底部一条游戏地面同款方格装饰（绿顶棕身块+浅绿底），移动/跳跃键坐落带内。
+     挂在 #touchLayer 内 → 竖屏旋转模式随层一起旋转到画面旋转方向的底部；纯装饰不吃触摸。 */
+  #touchLayer::before {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+    height: calc(116px + env(safe-area-inset-bottom));
+    background-color: #a5dcb8;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='44'%3E%3Cpath d='M1 0h38v32q0 12-11 12H12Q1 44 1 32Z' fill='%23c98d5f'/%3E%3Crect x='1' y='0' width='38' height='13' fill='%237ecb7f'/%3E%3C/svg%3E");
+    background-repeat: repeat-x; background-position: bottom; background-size: 40px 44px;
+    opacity: .9;
+  }
   .tpad {
     pointer-events: auto;
     width: 68px; height: 68px; border-radius: 50%;
