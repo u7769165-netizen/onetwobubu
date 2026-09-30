@@ -182,8 +182,14 @@ let chrome;
   await evl(`document.getElementById('tpSwitch').click()`);
   r = await evl(`touchIdx === 0 && keys.ArrowRight !== true`);
   ok(r === true, 'B9 切回一二且旧键组无残留');
-  r = await evl(`(() => { const b = document.getElementById('tpLeft').getBoundingClientRect(); return b.width >= 80 && b.height >= 80 })()`);
-  ok(r === true, 'B10 方向键 ≥80×80px');
+  r = await evl(`(() => { const b = document.getElementById('tpLeft').getBoundingClientRect(); return b.width >= 64 && b.height >= 64 })()`);
+  ok(r === true, 'B10 方向键 ≥64×64px（≥44px 触摸目标下限）');
+  r = JSON.parse(await evl(`(() => { const b = document.getElementById('tpRight'); const cs = getComputedStyle(b);
+    const lb = document.getElementById('tpLeft').getBoundingClientRect(); const jp = document.getElementById('tpJump').getBoundingClientRect();
+    return JSON.stringify({ op: parseFloat(cs.opacity), leftGap: Math.round(lb.left), rightGap: Math.round(innerWidth - jp.right),
+      bottomGap: Math.round(innerHeight - jp.bottom) }) })()`));
+  ok(r.op <= 0.6 && r.leftGap <= 14 && r.rightGap <= 14 && r.bottomGap <= 14,
+    'B13 按键半透明(.55)且贴边（≤14px），减少手掌遮挡画面', JSON.stringify(r));
   await pdown('tpJump', 41);
   r = await evl(`document.getElementById('tpJump').classList.contains('on')`);
   ok(r === true, 'B11 按下有 .on 反馈样式');

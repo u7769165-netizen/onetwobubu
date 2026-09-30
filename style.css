@@ -331,29 +331,30 @@
   #touchLayer.hidden { display: none; }
   .tpad {
     pointer-events: auto;
-    width: 88px; height: 88px; border-radius: 50%;
+    width: 68px; height: 68px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 34px; color: rgba(255,255,255,.92);
+    font-size: 26px; color: rgba(255,255,255,.92);
     background: rgba(60,45,35,.32); border: 2px solid rgba(255,255,255,.4);
     box-shadow: 0 4px 14px rgba(0,0,0,.25);
     touch-action: none; -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none; user-select: none; cursor: pointer;
-    transition: transform .08s, background .08s, filter .08s;
+    /* 半透明贴边：减少按键+手掌对游戏核心画面的遮挡（真机反馈），按下时恢复醒目 */
+    opacity: .55; transition: transform .08s, background .08s, filter .08s, opacity .12s;
   }
-  .tpad.on { transform: scale(.9); filter: brightness(1.25); background: rgba(240,163,94,.55); }
-  .tpad-grp { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; gap: 14px; pointer-events: none; }
-  .tp-left { left: calc(16px + env(safe-area-inset-left)); }
-  .tp-right { right: calc(16px + env(safe-area-inset-right)); flex-direction: column; align-items: center; gap: 10px; }
+  .tpad.on { transform: scale(.9); filter: brightness(1.25); background: rgba(240,163,94,.55); opacity: .95; }
+  .tpad-grp { position: fixed; bottom: calc(6px + env(safe-area-inset-bottom)); display: flex; gap: 10px; pointer-events: none; }
+  .tp-left { left: calc(10px + env(safe-area-inset-left)); }
+  .tp-right { right: calc(10px + env(safe-area-inset-right)); flex-direction: column; align-items: center; gap: 8px; }
   .tp-pause {
-    position: fixed; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left));
-    width: 56px; height: 56px; font-size: 24px; bottom: auto;
+    position: fixed; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left));
+    width: 46px; height: 46px; font-size: 20px; bottom: auto;
   }
-  .tp-switch { width: 76px; height: 40px; border-radius: 20px; font-size: 14px; letter-spacing: 1px; }
+  .tp-switch { width: 62px; height: 32px; border-radius: 16px; font-size: 12px; letter-spacing: 1px; }
   .tp-switch.hidden { display: none; }
   /* 竖屏旋转模式专用：切换旋转方向钮（横屏/桌面隐藏，见下方 portrait 块） */
-  .tp-flip { display: none; position: fixed; top: calc(12px + env(safe-area-inset-top));
-    right: calc(12px + env(safe-area-inset-right)); left: auto; bottom: auto;
-    width: 44px; height: 44px; font-size: 20px; }
+  .tp-flip { display: none; position: fixed; top: calc(8px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right)); left: auto; bottom: auto;
+    width: 40px; height: 40px; font-size: 18px; }
   #rotateHint {
     display: none; position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
     font-size: 13px; letter-spacing: 2px; color: #fff; pointer-events: none;
@@ -413,10 +414,10 @@
   #touchGuide .tg-item { position: fixed; pointer-events: none; white-space: nowrap;
     font-size: 13px; letter-spacing: 1px; color: #fff; padding: 5px 12px; border-radius: 14px;
     background: rgba(60,45,35,.8); border: 1px solid rgba(255,255,255,.45); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
-  #touchGuide .tg-pause { top: calc(14px + env(safe-area-inset-top)); left: calc(80px + env(safe-area-inset-left)); }
-  #touchGuide .tg-move { bottom: calc(116px + env(safe-area-inset-bottom)); left: calc(16px + env(safe-area-inset-left)); }
-  #touchGuide .tg-jump { bottom: calc(42px + env(safe-area-inset-bottom)); right: calc(114px + env(safe-area-inset-right)); }
-  #touchGuide .tg-switch { bottom: calc(122px + env(safe-area-inset-bottom)); right: calc(114px + env(safe-area-inset-right)); }
+  #touchGuide .tg-pause { top: calc(10px + env(safe-area-inset-top)); left: calc(62px + env(safe-area-inset-left)); }
+  #touchGuide .tg-move { bottom: calc(84px + env(safe-area-inset-bottom)); left: calc(10px + env(safe-area-inset-left)); }
+  #touchGuide .tg-jump { bottom: calc(28px + env(safe-area-inset-bottom)); right: calc(84px + env(safe-area-inset-right)); }
+  #touchGuide .tg-switch { bottom: calc(92px + env(safe-area-inset-bottom)); right: calc(84px + env(safe-area-inset-right)); }
   #touchGuide .tg-switch.hidden { display: none; }
   @media (max-height: 420px) {
     #touchGuide .tg-center { top: 34%; }
