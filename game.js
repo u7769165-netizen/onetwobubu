@@ -368,6 +368,26 @@ function initTouchLayer() {
   };
   window.addEventListener('pointerup', winRelease);
   window.addEventListener('pointercancel', winRelease);
+  // 第四重兜底：iOS Safari 长按后系统手势接管可能吞掉 pointerup/pointercancel（真机反馈跳跃键卡死），
+  // 但 TouchEvent 的 touchend/touchcancel 几乎不丢——按剩余触点 reconcile，无手指的按住键强制释放
+  const TOUCH_BTN = { left: 'tpLeft', right: 'tpRight', jump: 'tpJump' };
+  const reconcileTouch = e => {
+    for (const k in TOUCH_BTN) {
+      if (!touchHeld[k]) continue;
+      const btn = document.getElementById(TOUCH_BTN[k]);
+      let held = false;
+      for (let i = 0; i < e.touches.length; i++) {
+        const el = document.elementFromPoint(e.touches[i].clientX, e.touches[i].clientY);
+        if (el && (el === btn || btn.contains(el))) { held = true; break; }
+      }
+      if (!held) {
+        touchHeld[k] = false; tpSlot[k].clear(); syncTouchKeys();
+        btn.classList.remove('on');
+      }
+    }
+  };
+  window.addEventListener('touchend', reconcileTouch, { passive: true });
+  window.addEventListener('touchcancel', reconcileTouch, { passive: true });
   window.addEventListener('blur', releaseAllTouch);
   document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAllTouch(); });
   layer.addEventListener('contextmenu', e => e.preventDefault());   // iOS 长按菜单

@@ -208,6 +208,21 @@ let chrome;
   await evl(`window.dispatchEvent(new Event('blur'))`);
   r = await evl(`touchHeld.left === false && touchHeld.right === false && touchHeld.jump === false`);
   ok(r === true, 'C4 失焦 blur 全释放');
+  // 第四重兜底：pointerup/pointercancel 全丢（iOS 长按系统手势吞事件）→ touchend reconcile 释放
+  await pdown('tpJump', 61);
+  r = await evl(`(() => { window.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [], bubbles: true }));
+    return touchHeld.jump === false && keys.KeyW === false && !document.getElementById('tpJump').classList.contains('on') })()`);
+  ok(r === true, 'C5 touchend 兜底：release 事件丢失仍可释放（iOS 长按卡键）');
+  // 另一指仍按在键上时 touchend 不误释放
+  await pdown('tpLeft', 62);
+  r = await evl(`(() => { const b = document.getElementById('tpLeft').getBoundingClientRect();
+    const t = new Touch({ identifier: 7, target: document.getElementById('tpLeft'), clientX: b.x + b.width / 2, clientY: b.y + b.height / 2 });
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [t], changedTouches: [], bubbles: true }));
+    return touchHeld.left === true && keys.KeyA === true })()`);
+  ok(r === true, 'C6 手指仍在键上时 touchend 不误释放');
+  await evl(`window.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [], bubbles: true }))`);
+  r = await evl(`touchHeld.left === false`);
+  ok(r === true, 'C7 指抬起（touches 空）后释放');
 
   /* ===== D. 暂停链路 ===== */
   await evl(`document.getElementById('tpPause').click()`); await sleep(200);
