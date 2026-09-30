@@ -190,6 +190,11 @@ let chrome;
       bottomGap: Math.round(innerHeight - jp.bottom) }) })()`));
   ok(r.op <= 0.6 && r.leftGap <= 14 && r.rightGap <= 14 && r.bottomGap <= 14,
     'B13 按键半透明(.55)且贴边（≤14px），减少手掌遮挡画面', JSON.stringify(r));
+  r = JSON.parse(await evl(`(() => { const cs = getComputedStyle(document.getElementById('tpLeft'));
+    const bcs = getComputedStyle(document.body); const ccs = getComputedStyle(document.getElementById('game'));
+    return JSON.stringify({ sel: cs.userSelect, bta: bcs.touchAction, cta: ccs.touchAction }) })()`));
+  ok(r.sel === 'none' && r.bta === 'manipulation' && r.cta === 'manipulation',
+    'B14 按键禁长按选字 + 游玩态禁双击缩放（touch-action:manipulation）', JSON.stringify(r));
   await pdown('tpJump', 41);
   r = await evl(`document.getElementById('tpJump').classList.contains('on')`);
   ok(r === true, 'B11 按下有 .on 反馈样式');
