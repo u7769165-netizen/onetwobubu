@@ -13,6 +13,13 @@ function ensureCtx() {
   } catch (e) {}
   return audioCtx;
 }
+/* iOS Safari 自动播放策略：AudioContext 必须在用户手势回调内创建/恢复，游戏循环里 resume 会被拒绝
+   → 真机全程无声。常驻监听每次触摸/点击都 ensureCtx（幂等、开销可忽略），切后台被系统挂起后
+   再回前台点一下也能立即恢复。capture 阶段先于按钮 preventDefault。 */
+const AUDIO_UNLOCK = () => { ensureCtx(); };
+window.addEventListener('pointerdown', AUDIO_UNLOCK, true);
+window.addEventListener('touchstart', AUDIO_UNLOCK, true);
+window.addEventListener('keydown', AUDIO_UNLOCK, true);
 function beep(freq, dur, type, vol) {
   if (!save.settings.sfx || paused) return;
   const v = (vol || 0.12) * (save.settings.volSfx / 100);
