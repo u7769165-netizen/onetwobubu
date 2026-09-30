@@ -84,13 +84,19 @@ function drawBackground(theme) {
 
   // 远山/近丘：正弦轮廓 + 视差滚动（远 0.3、近 0.55）
   const hills = (par, amp, base, freq, col) => {
+    // P4：采样步长 8→12（路径点数 -33%），末点显式补 W 保证轮廓右缘不变形
     ctx.fillStyle = col;
     ctx.beginPath();
     ctx.moveTo(0, H);
-    for (let x = 0; x <= W; x += 8) {
+    for (let x = 0; x < W; x += 12) {
       const wx = x + camX * par;
       const y = H - base - amp * (0.6 + 0.4 * Math.sin(wx * freq)) * (0.5 + 0.5 * Math.sin(wx * freq * 0.37 + 1.7));
       ctx.lineTo(x, y);
+    }
+    {
+      const wx = W + camX * par;
+      const y = H - base - amp * (0.6 + 0.4 * Math.sin(wx * freq)) * (0.5 + 0.5 * Math.sin(wx * freq * 0.37 + 1.7));
+      ctx.lineTo(W, y);
     }
     ctx.lineTo(W, H);
     ctx.closePath(); ctx.fill();
@@ -117,7 +123,7 @@ function drawTiles(theme) {
     ctx.fillStyle = theme.ground;
     roundRectPath(s.x + 1, s.y + 1, s.w - 2, s.h - 2, 6);
     ctx.fill();
-    const aboveSolid = solidSet.has(s.x + ',' + (s.y - TILE));
+    const aboveSolid = solidSet.has(s.x * 4096 + (s.y - TILE));   // 数值键免字符串分配（与 game.js loadLevel 建键一致）
     if (!aboveSolid) {
       if (s.ice) {
         ctx.fillStyle = 'rgba(190,235,255,.95)';

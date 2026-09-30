@@ -418,8 +418,9 @@ function buildMap() {
   });
 }
 
-/* ---- 高清渲染：2x 后备画布，解决角色清晰度低 ---- */
-const DPR = 2;
+/* ---- 高清渲染：后备画布像素比（默认 2x；主循环帧时间监控可自适应降到 1.5，见 setDpr）---- */
+let DPR = 2;
+let needRender = true;   // P0 空闲跳帧补渲标志：画布缓冲被重置（fitViewport/setDpr）后置 true，主循环补渲一帧
 let LOGICAL_W = 640;
 const LOGICAL_H = 400;
 canvas.width = LOGICAL_W * DPR;
@@ -453,6 +454,18 @@ function fitViewport() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  needRender = true;   // 缓冲清空后即使处于暂停/菜单也补渲一帧，避免半透明层下露出透明画布
+}
+/* ---- P2 自适应 DPR：主循环帧时间监控调用；重设缓冲后置 needRender 触发补渲 ---- */
+function setDpr(d) {
+  if (d === DPR) return;
+  DPR = d;
+  canvas.width = LOGICAL_W * DPR;
+  canvas.height = LOGICAL_H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  needRender = true;
 }
 let fitTimer = null;
 function scheduleFit() { clearTimeout(fitTimer); fitTimer = setTimeout(fitViewport, 150); }   // resize/旋转/地址栏收放防抖

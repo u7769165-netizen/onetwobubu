@@ -81,6 +81,7 @@ function resumeGame() {
   if (!paused) return;
   if (net.mode === 'online' && net.role === 'guest') { netSend({ t: 'preq' }); return; }  // 恢复由主机 pa 消息生效
   paused = false;
+  needRender = true;             // P0：暂停期间画布冻结，恢复瞬间补渲一帧
   pauseMenu.classList.add('hidden');
   if (net.mode === 'online' && net.role === 'host') netSend({ t: 'pa', v: 0 });
   if (wasRunningBeforePause) { running = true; last = performance.now(); acc = 0; }
@@ -91,7 +92,7 @@ let curLevel = 0, running = false, won = false, dead = false;
 let paused = false, wasRunningBeforePause = false;
 let cols = 0, rows = 0;
 let solids = [], waters = [], lavas = [], toxins = [];
-let solidSet = new Set();   // "x,y" 快速查表：drawTiles 判断「上方是否实心」由 O(n²) 降为 O(n)
+let solidSet = new Set();   // 数值键 x*4096+y 快速查表：drawTiles 判断「上方是否实心」O(1)，且免每帧字符串分配（P3）
 let buttons = [], doors = [], ghostDoors = [], boxes = [], gems = [], exits = [];
 let spikes = [], flames = [], slimes = [], plats = [], gravZones = [], pads = [];
 /* 恋爱终章新机关：J 连压板（成对分组 jPairs）/ b 心之桥 / z 平衡升降台 / 全局桥态与升降偏移 */
@@ -178,7 +179,7 @@ function loadLevel(idx, autoStart) {
       else if (ch === 'K') doors.push({ x: x + TILE / 2, baseY: y + TILE, open: false, color: '#ffd54a', momentary: true });   // 连压板配对门（金色，离开即关）
     }
   }
-  solidSet = new Set(solids.map(s => s.x + ',' + s.y));
+  solidSet = new Set(solids.map(s => s.x * 4096 + s.y));   // 坐标均为 TILE(40) 倍数、y<4096，数值键无碰撞
   /* J 板按 x 排序两两成对，第 i 对 ↔ 第 i 扇 K 门；lift 平台缓存 */
   lifts = plats.filter(pl => pl.axis === 'lift');
   padsJ.sort((a, b) => a.x - b.x);
@@ -518,17 +519,38 @@ function tick() {
 
 /* ================= 主循环 ================= */
 let last = 0, acc = 0;
+/* 性能计数器（CDP 测试与诊断可读）：renders=实际全量渲染帧数，ticks=固定步长执行次数，maxSteps=单帧最大补步数 */
+const perfStats = { renders: 0, ticks: 0, maxSteps: 0 };
+/* P2 自适应 DPR：帧时间 EMA（α=0.05），仅游玩推进（running 且未暂停）时采样；
+   持续 >19ms（约 1s）→ DPR 2→1.5 降光栅化压力；持续 <13ms（约 3s，仅高刷屏可达）→ 回 2。
+   60Hz 屏 rAF 间隔约 16.7ms，降级后本局保持，避免震荡。 */
+let ftEma = 16.7, dprStreak = 0;
+const DPR_HIGH = 2, DPR_LOW = 1.5;
 function loop(t) {
-  const dt = Math.min((t - last) / 1000, 0.1);
+  const raw = t - last;
+  const dt = Math.min(raw / 1000, 0.1);
   last = t;
   if (net.mode === 'online' && net.role === 'guest') {
-    if (screenMode === 'play') guestFrame(dt);
+    // guestFrame 内部含 render；暂停且无需补渲时整体跳过（keys 已清空，上行输入无意义）
+    if (screenMode === 'play' && (!paused || needRender)) { guestFrame(dt); perfStats.renders++; needRender = false; }
     requestAnimationFrame(loop);
     return;
   }
   acc += dt;
-  while (acc >= STEP) { tick(); acc -= STEP; }
-  render();
+  let steps = 0;
+  while (acc >= STEP && steps < 5) { tick(); acc -= STEP; steps++; perfStats.ticks++; }
+  if (acc >= STEP) acc = 0;   // P1：达步数上限丢弃积压（防后台恢复瞬间 tick 风暴）
+  if (steps > perfStats.maxSteps) perfStats.maxSteps = steps;
+  // P0 空闲跳帧：暂停/菜单界面不再全量渲染（画布保留最后一帧，半透明 DOM 层下视觉不变）；
+  // won/dead/netWaiting 均属 play 且未暂停 → 继续渲染通关/死亡动效
+  const active = screenMode === 'play' && !paused;
+  if (active || needRender) { render(); perfStats.renders++; needRender = false; }
+  if (active && running && raw > 0 && raw < 100) {
+    ftEma += (raw - ftEma) * 0.05;
+    if (ftEma > 19 && DPR > DPR_LOW) { if (++dprStreak >= 60) { setDpr(DPR_LOW); dprStreak = 0; } }
+    else if (ftEma < 13 && DPR < DPR_HIGH) { if (++dprStreak >= 180) { setDpr(DPR_HIGH); dprStreak = 0; } }
+    else dprStreak = 0;
+  }
   if (net.mode === 'online' && net.role === 'host') {
     netHostFrame(t);
     if (netWaiting && !net.soloAllowed && Date.now() - netWaitSince > 120000) {
