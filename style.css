@@ -350,6 +350,10 @@
   }
   .tp-switch { width: 76px; height: 40px; border-radius: 20px; font-size: 14px; letter-spacing: 1px; }
   .tp-switch.hidden { display: none; }
+  /* 竖屏旋转模式专用：切换旋转方向钮（横屏/桌面隐藏，见下方 portrait 块） */
+  .tp-flip { display: none; position: fixed; top: calc(12px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right)); left: auto; bottom: auto;
+    width: 44px; height: 44px; font-size: 20px; }
   #rotateHint {
     display: none; position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
     font-size: 13px; letter-spacing: 2px; color: #fff; pointer-events: none;
@@ -376,6 +380,28 @@
     body.touch.play #wrap { width: 100vw; height: 100vh; height: 100dvh; aspect-ratio: auto; border-radius: 0; box-shadow: none;
       display: flex; align-items: center; justify-content: center; }
     body.touch.play #wrap canvas { width: auto; height: auto; max-width: 100%; max-height: 100%; }
+  }
+  /* 触屏竖屏旋转全屏：iPhone 开旋转锁定、物理横握时视口仍是竖屏（真机反馈画面太小）——
+     把 #wrap/#touchLayer/#hud 整体旋转 90° 成"等效横屏"：容器尺寸交换（宽=视口高、高=视口宽）居中后旋转，
+     画面铺满、按键/HUD/引导层随画面同向悬浮可点。rot-ccw（↻ 钮）反向旋转适配另一种握姿。
+     .screen 菜单不进此门控（非 play 即回竖屏正向布局；暂停菜单挂 body 层保持竖屏）。
+     门控与 ui.js fitViewport() 逐字等价（coarse+play 下 landscape/portrait 两块互补），改动须两侧同步。 */
+  @media (pointer: coarse) and (orientation: portrait) {
+    body.touch.play { padding-bottom: 0; }
+    body.touch.play #wrap { position: fixed; left: 50%; top: 50%;
+      width: 100vh; width: 100dvh; height: 100vw;
+      transform: translate(-50%, -50%) rotate(90deg);
+      aspect-ratio: auto; border-radius: 0; box-shadow: none;
+      display: flex; align-items: center; justify-content: center; }
+    body.touch.play #wrap canvas { width: auto; height: auto; max-width: 100%; max-height: 100%; }
+    body.touch.play #touchLayer { left: 50%; top: 50%; right: auto; bottom: auto;
+      width: 100vh; width: 100dvh; height: 100vw;
+      transform: translate(-50%, -50%) rotate(90deg); }
+    body.touch.play #hud { top: 50%; left: 50%; width: auto;
+      transform: translate(calc(50vw - 16px), -50%) rotate(90deg); }
+    body.touch.play .tp-flip { display: flex; }
+    body.touch.play.rot-ccw #wrap, body.touch.play.rot-ccw #touchLayer { transform: translate(-50%, -50%) rotate(-90deg); }
+    body.touch.play.rot-ccw #hud { transform: translate(calc(-50vw + 16px), -50%) rotate(-90deg); }
   }
   /* 触屏首启引导层：全屏半透明遮罩 + 就近标注四个虚拟键（safe-area 公式与 .tpad 同一套） */
   #touchGuide { position: fixed; inset: 0; pointer-events: auto; cursor: pointer; background: rgba(12,8,22,.55); -webkit-tap-highlight-color: transparent; }

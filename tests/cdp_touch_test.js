@@ -1,5 +1,5 @@
-/* 触屏虚拟按键专项测试（CDP headless Chrome，模拟 844×390 横屏移动设备）
-   覆盖：DOM/三态显示 / 首启引导层 / 键组映射 / 多指与双指同键 / 按键尺寸与反馈 / 暂停链路 / 防卡键 / 设置接线 / 触摸延迟 / 无异常 */
+/* 触屏虚拟按键专项测试（CDP headless Chrome，模拟 844×390 横屏移动设备 + 400×800 竖屏旋转段）
+   覆盖：DOM/三态显示 / 首启引导层 / 横屏全屏 / 竖屏旋转全屏 / 键组映射 / 多指与双指同键 / 按键尺寸与反馈 / 暂停链路 / 防卡键 / 设置接线 / 触摸延迟 / 无异常 */
 const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
@@ -50,7 +50,7 @@ let chrome;
   await sleep(4000);
 
   /* ===== A. DOM 与三态显示 ===== */
-  let r = await evl(`['touchLayer','tpPause','tpLeft','tpRight','tpJump','tpSwitch','rotateHint','touchSelect'].every(i=>document.getElementById(i))`);
+  let r = await evl(`['touchLayer','tpPause','tpLeft','tpRight','tpJump','tpSwitch','tpFlip','rotateHint','touchSelect'].every(i=>document.getElementById(i))`);
   ok(r === true, 'A1 触屏 DOM 与设置下拉齐全');
   r = await evl(`save.settings.touch`);
   ok(r === 'auto', `A2 新档默认 touch=auto`, String(r));
@@ -102,6 +102,53 @@ let chrome;
   r = JSON.parse(await evl(`(() => { showScreen('title'); return JSON.stringify({ logW: LOGICAL_W, bufW: canvas.width }) })()`));
   ok(r.logW === 640 && r.bufW === 1280, 'A13 回 title 退出全屏→LOGICAL_W 回 640', JSON.stringify(r));
   await evl(`showScreen('play'); loadLevel(0, false)`);
+
+  /* ===== A+. 竖屏旋转全屏（iPhone 开旋转锁定、物理横握：视口竖屏但画面旋转 90° 铺满） ===== */
+  await send('Emulation.setDeviceMetricsOverride', { width: 400, height: 800, deviceScaleFactor: 2, mobile: true });
+  await sleep(500);   // resize → scheduleFit(150ms 防抖) → fitViewport 竖屏分支
+  r = JSON.parse(await evl(`(() => { const w = document.getElementById('wrap').getBoundingClientRect();
+    const cv = document.getElementById('game').getBoundingClientRect();
+    const m = new DOMMatrix(getComputedStyle(document.getElementById('wrap')).transform);
+    const tl = document.getElementById('tpLeft').getBoundingClientRect();
+    const hit = document.elementFromPoint(tl.x + tl.width / 2, tl.y + tl.height / 2);
+    return JSON.stringify({ logW: LOGICAL_W, bufW: canvas.width, bufH: canvas.height,
+      wrapW: Math.round(w.width), wrapH: Math.round(w.height), cvW: cv.width, cvH: cv.height,
+      cvIn: cv.left >= -1 && cv.top >= -1 && cv.right <= innerWidth + 1 && cv.bottom <= innerHeight + 1,
+      rot: Math.abs(m.a) < 0.01 && Math.abs(Math.abs(m.b) - 1) < 0.01,
+      btnIn: tl.left >= 0 && tl.right <= innerWidth && tl.top >= 0 && tl.bottom <= innerHeight,
+      hitBtn: !!(hit && hit.closest && hit.closest('#tpLeft')),
+      hint: document.getElementById('rotateHint').textContent,
+      flipVis: getComputedStyle(document.getElementById('tpFlip')).display }) })()`));
+  const pRatioDiff = Math.abs(r.cvW / r.cvH - r.bufH / r.bufW);   // 旋转 90° 后 AABB 宽高互换，比缓冲反比
+  ok(r.logW === 800 && r.bufW === 1600 && r.bufH === 800, 'A14 竖屏：缓冲随视口长短边（400×800→逻辑 800×400×2）', JSON.stringify(r));
+  ok(r.wrapW >= 396 && r.wrapH >= 796 && r.rot, 'A15 竖屏：#wrap 旋转 90° 且铺满视口', JSON.stringify(r));
+  ok(r.cvIn && pRatioDiff < 0.01, 'A16 竖屏：画布 contain 无拉伸（ΔAABB 反比 ' + pRatioDiff.toFixed(4) + '）', JSON.stringify(r));
+  ok(r.btnIn && r.hitBtn && r.flipVis !== 'none', 'A17 竖屏：方向键在视口内可命中，↻ 换向钮可见', JSON.stringify(r));
+  ok(typeof r.hint === 'string' && r.hint.includes('↻'), 'A18 竖屏：提示文案切换为换向引导', String(r.hint));
+  await shot('touch_play_rotated.png');
+  const pr = await rect('tpLeft');   // 旋转坐标系下真实触摸（rect 中心不受旋转影响）
+  await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pr.x + pr.width / 2, y: pr.y + pr.height / 2 }] });
+  r = await evl(`keys.KeyA === true`);
+  ok(r === true, 'A19 竖屏旋转：真实触摸方向键生效');
+  await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await releaseAll();
+  await evl(`document.getElementById('tpFlip').click()`);
+  r = JSON.parse(await evl(`(() => { const m = new DOMMatrix(getComputedStyle(document.getElementById('wrap')).transform);
+    return JSON.stringify({ ccw: document.body.classList.contains('rot-ccw'), b: m.b }) })()`));
+  ok(r.ccw === true && r.b < -0.99, 'A20 点 ↻→rot-ccw 反向旋转（适配另一种握姿）', JSON.stringify(r));
+  await evl(`document.getElementById('tpFlip').click()`);
+  r = await evl(`!document.body.classList.contains('rot-ccw')`);
+  ok(r === true, 'A21 再点 ↻ 恢复正向旋转');
+  await evl(`pauseGame()`); await sleep(150);   // 暂停菜单保持竖屏正向（不随画面旋转）
+  r = JSON.parse(await evl(`(() => { const p = document.getElementById('pauseMenu').getBoundingClientRect();
+    return JSON.stringify({ w: Math.round(p.width), h: Math.round(p.height), tf: getComputedStyle(document.getElementById('pauseMenu')).transform }) })()`));
+  ok(r.w >= 396 && r.h >= 796 && (r.tf === 'none' || r.tf.startsWith('matrix(1, 0, 0, 1')),
+    'A22 暂停菜单保持竖屏正向铺满视口', JSON.stringify(r));
+  await evl(`resumeGame()`);
+  await send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 2, mobile: true });
+  await sleep(500);   // 回横屏：旋转块退出，恢复横屏全屏段
+  r = JSON.parse(await evl(`JSON.stringify({ tf: getComputedStyle(document.getElementById('wrap')).transform, logW: LOGICAL_W })`));
+  ok((r.tf === 'none' || r.tf.startsWith('matrix(1, 0, 0, 1')) && r.logW === 866, 'A23 回横屏：旋转退出且缓冲回横屏 866', JSON.stringify(r));
 
   /* ===== B. 键组映射与多指 ===== */
   await pdown('tpLeft', 11);

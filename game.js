@@ -375,6 +375,10 @@ function initTouchLayer() {
   document.getElementById('tpSwitch').addEventListener('click', () => {
     touchIdxLocal = 1 - touchIdxLocal; updateTouchMode();
   });
+  // 竖屏旋转模式：↻ 切换旋转方向（适配手机顶部朝左/朝右两种握姿，横屏下钮隐藏不生效）
+  document.getElementById('tpFlip').addEventListener('click', () => {
+    document.body.classList.toggle('rot-ccw');
+  });
   // 外接触屏热插拔时刷新 auto 判定（老 Safari 无 addEventListener 则忽略）
   try { matchMedia('(pointer: coarse)').addEventListener('change', applyTouchVisibility); } catch (e) {}
   // 首启引导：点任意处关闭；preventDefault 抑制兼容 click，保证首击不穿透到 #wrap 启动游戏

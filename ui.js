@@ -429,14 +429,22 @@ ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 ctx.imageSmoothingEnabled = true;
 ctx.imageSmoothingQuality = 'high';
 
-/* ---- 触屏横屏无黑边全屏：可变逻辑视口（高度恒 400，宽度随设备比例）----
-   门控条件与 style.css 的 @media (pointer:coarse) and (orientation:landscape) + body.touch.play 逐字等价，
-   两侧不一致会导致画布缓冲与 CSS 显示比例脱节（拉伸）。仅触屏横屏游玩生效，桌面/竖屏恒 640。 */
+/* ---- 触屏无黑边全屏：可变逻辑视口（高度恒 400，宽度随设备长短边比例）----
+   横屏：#wrap 直接铺满视口；竖屏（旋转锁定+物理横握，真机反馈画面太小）：CSS 把 #wrap/#touchLayer/#hud
+   整体旋转 90° 成"等效横屏"，缓冲比例同样按视口长边/短边计算。
+   门控条件与 style.css 两个 @media (pointer:coarse) 块逐字等价（coarse+play 下横竖互补恒命中其一），
+   两侧不一致会导致画布缓冲与 CSS 显示比例脱节（拉伸）。仅触屏游玩生效，桌面/菜单恒 640。 */
 function fitViewport() {
-  const full = matchMedia('(pointer: coarse)').matches && matchMedia('(orientation: landscape)').matches &&
+  const full = matchMedia('(pointer: coarse)').matches &&
     document.body.classList.contains('touch') && document.body.classList.contains('play');
+  const port = matchMedia('(orientation: portrait)').matches;
   let next = 640;
-  if (full) next = Math.max(640, Math.min(1280, Math.round(LOGICAL_H * innerWidth / innerHeight)));
+  if (full) {
+    const ratio = port ? innerHeight / innerWidth : innerWidth / innerHeight;
+    next = Math.max(640, Math.min(1280, Math.round(LOGICAL_H * ratio)));
+  }
+  const rh = document.getElementById('rotateHint');
+  if (rh) rh.textContent = (full && port) ? '🔄 画面颠倒？点 ↻ 换向' : '📱 建议横屏游玩';
   if (next !== 640 && LOGICAL_W !== 640 && Math.abs(next - LOGICAL_W) < 2) return;   // 滞回：忽略 iOS 地址栏动画小幅抖动
   if (next === LOGICAL_W) return;
   LOGICAL_W = next;
