@@ -151,6 +151,23 @@ async function boot(client, port) {
     check('手动下拉优先（rateManual=30 即时生效）', man.manual === 30 && man.rate === 30, JSON.stringify(man));
     await A.evalJs(`(() => { const sel=document.getElementById('netRate'); sel.value='20'; sel.dispatchEvent(new Event('change')); return 'r'; })()`);
 
+    // ---------- 双端视口宽不同：客机相机中心重映射 + 本端边界钳制（快照 vw 字段） ----------
+    const vwMap = JSON.parse(await B.evalJs(`(() => {
+      const t = performance.now();
+      const mk = (cam, vw) => ({ ts: t, m: { cam, vw, p: [[0,300,0,1,0,0,0,1,0],[100,300,0,1,0,0,0,1,0]], a: 0, g: '', dr: '', hc: '', sh: 0, hh: 0, bx: [], lz: 0, st: 0, dd: 0, w: 0, d: 0, bo: 0 } });
+      const oldW = LOGICAL_W, run = (cam, vw, localW) => { net.snapBuf = [mk(cam, vw), mk(cam, vw)]; LOGICAL_W = localW; try { guestFrame(0.016); } catch (e) { return 'ERR:' + e.message; } return Math.round(camX * 10) / 10; };
+      const right = run(1280, 640, 866);  // 主机 640 视口右缘（1920-640=1280）→ 客机 866 中心映射 1167 越界，应钳到本端右缘 1920-866=1054
+      const mid = run(700, 640, 866);     // 中段：1280 内无越界 → 直传中心映射 700-113=587
+      const left = run(0, 640, 866);      // 主机左缘 → 客机钳到 0（不露 -113 天空）
+      const same = run(500, 640, 640);    // 同宽直传
+      const legacy = run(500, undefined, 640);   // 旧客户端无 vw 字段按 640 回退
+      LOGICAL_W = oldW; guestFrame(0.016);
+      return JSON.stringify({ right, mid, left, same, legacy }) })()`));
+    check('宽客机右缘钳到 1054 不越界', vwMap.right === 1054, JSON.stringify(vwMap));
+    check('宽客机中段中心映射 587', vwMap.mid === 587, JSON.stringify(vwMap));
+    check('宽客机左缘钳到 0 不露天空', vwMap.left === 0, JSON.stringify(vwMap));
+    check('同宽/旧客户端直传不变', vwMap.same === 500 && vwMap.legacy === 500, JSON.stringify(vwMap));
+
     // 截图
     const shot = async (c, name) => { const r = await c.send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(OUT + '\\' + name, Buffer.from(r.result.data, 'base64')); };
     await shot(B, 'net_guest.png');

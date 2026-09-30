@@ -191,7 +191,7 @@ function netHostFrame(now) {
       t: 'st', lv: curLevel, ver: net.ver, hi: net.idx,
       p: players.map(q => [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10, Math.round(q.vx), q.face, q.mode === 'side' ? 1 : 0,
         Math.round(q.walkPhase * 100) / 100, Math.round(q.tilt * 1000) / 1000, q.onGround ? 1 : 0, q.gflip ? 1 : 0]),
-      cam: Math.round(camX * 10) / 10, lt: Math.round(levelTime * 100) / 100, a: Math.round(animT * 100) / 100,
+      cam: Math.round(camX * 10) / 10, vw: LOGICAL_W, lt: Math.round(levelTime * 100) / 100, a: Math.round(animT * 100) / 100,
       g: gems.map(g => g.got ? 1 : 0).join(''), dr: doors.map(d => d.open ? 1 : 0).join(''),
       hc: hearts.map(h => h.got ? 1 : 0).join(''), sh: Math.round(shieldT * 10) / 10, hh: handHolding ? 1 : 0,
       bx: boxes.map(b => [Math.round(b.x), Math.round(b.y)]),
@@ -304,7 +304,12 @@ function guestFrame(dt) {
       p.onGround = !!pa[7]; p.gflip = !!pa[8];
       p.flipT = null; p.settleT = null; p.inputDir = 0;
     }
-    camX = b.m.cam + (a.m.cam - b.m.cam) * k;
+    // 双端逻辑视口宽可不同（触屏横屏全屏 866 vs 桌面 640）：以主机视口中心映射到本端居中，再钳制本端卷轴边界
+    const camA = a.m.cam + ((a.m.vw || 640) - LOGICAL_W) / 2;
+    const camB = b.m.cam + ((b.m.vw || 640) - LOGICAL_W) / 2;
+    camX = camB + (camA - camB) * k;
+    const maxCam = Math.max(0, cols * TILE - LOGICAL_W);
+    camX = Math.max(0, Math.min(maxCam, camX));
     animT = m.a;   // 与主机对齐外观相位
     computeBridgeOn();   // 心之桥通断由插值后的双人坐标本地推导（与主机确定性一致）
   }
