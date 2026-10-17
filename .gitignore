@@ -1,17 +1,31 @@
+# ===== 依赖包 / 构建产物 =====
 node_modules/
+www/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+deploy/cloudflared.exe
+deploy/sdktmp/
+deploy/onetwobubu.apk
+
+# ===== 本地配置 / 服务端数据（含账号库与密钥，绝不上传）=====
+data/
+deploy/tunnel.log
+
+# ===== 运行时日志与测试临时产物 =====
+*.log
 tests/profile*/
 tests/pA/
 tests/pB/
 tests/pAu*/
 %USERP~1/
 _legacy/backup_*/
-www/
-deploy/cloudflared.exe
-deploy/sdktmp/
-deploy/tunnel.log
-deploy/onetwobubu.apk
-android/.gradle/
-android/build/
-android/app/build/
-data/
+tests/_last_run.log
 
+# ===== 编辑器 / 系统 =====
+.idea/
+*.iml
+.vscode/
+Thumbs.db
+Desktop.ini
